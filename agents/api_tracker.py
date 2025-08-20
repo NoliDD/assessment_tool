@@ -12,8 +12,8 @@ PRICES_USD_PER_MTOK: Dict[str, Dict[str, float]] = {
     "gpt-5-nano":   {"input": 0.05, "cached_input": 0.005, "output": 0.40},
     "gpt-5-chat-latest": {"input": 1.25, "cached_input": 0.125, "output": 10.00},
     # GPT-4o family
-    "gpt-4o":       {"input": 5.00,  "cached_input": 2.50,  "output": 20.00},
-    "gpt-4o-mini":  {"input": 0.60,  "cached_input": 0.30,  "output": 2.40},
+    "gpt-4o":       {"input": 2.50,  "cached_input": 1.25,  "output": 10.00},
+    "gpt-4o-mini":  {"input": 0.15,  "cached_input": 0.075,  "output": 0.60},
     # Fallback
     "default":      {"input": 5.00,  "cached_input": 2.50,  "output": 15.00},
 }
