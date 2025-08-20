@@ -1,0 +1,39 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+.vscode/
+
+__pycache__/
+*.pyc
+.env
+.venv/
+.DS_Store
+.vscode/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment
+.env
+
+# VS Code settings
+.vscode/
+
+# Python virtual environment
+venv/
+*.pyc
+__pycache__/
+
+# Streamlit secrets and config
+.streamlit/secrets.toml
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
