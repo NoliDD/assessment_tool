@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
 from openai import OpenAI
-import docx
-from io import BytesIO
 import re
+import yaml # Import the yaml library
 from utils import validate_api_key, init_session_state
 
 # --- Page Configuration and State Initialization ---
@@ -44,35 +43,20 @@ def initialize_chat_session():
 
 initialize_chat_session()
 
-# --- Parse criteria .docx ---
+# --- Parse criteria .yaml ---
 @st.cache_data
-def parse_criteria_doc(file_content):
-    """Parses a .docx file and extracts bolded headers and their subsequent text."""
-    if not file_content:
+def parse_criteria_yaml(yaml_content):
+    """Parses a YAML string and extracts the overview and instructions."""
+    if not yaml_content:
         return {}
     try:
-        doc = docx.Document(BytesIO(file_content))
-        criteria = {}
-        current_header = None
-        current_text = []
-
-        for para in doc.paragraphs:
-            # Check if the paragraph is bold, indicating a header
-            if para.runs and para.runs[0].bold:
-                # If we have a pending header and text, save it
-                if current_header and current_text:
-                    criteria[current_header.strip()] = "\n".join(current_text).strip()
-                # Start a new header
-                current_header = para.text
-                current_text = []
-            elif current_header:
-                # Append text to the current header's content
-                current_text.append(para.text)
-
-        # Save the last collected criteria
-        if current_header and current_text:
-            criteria[current_header.strip()] = "\n".join(current_text).strip()
-        return criteria
+        data = yaml.safe_load(yaml_content)
+        # Flatten the YAML data into a simpler dictionary for the chatbot
+        criteria_dict = {}
+        for key, value in data.items():
+            if isinstance(value, dict):
+                criteria_dict[key.replace('_', ' ').title()] = value.get('overview', '') + '\n\n' + value.get('instructions', '')
+        return criteria_dict
 
     except Exception as e:
         st.error(f"Failed to parse the criteria document. Error: {e}")
@@ -93,7 +77,9 @@ if not st.session_state.get('api_key_validated'):
     st.stop()
 
 # --- Load and Display Criteria Status ---
-assessment_criteria_dict = parse_criteria_doc(st.session_state.criteria_content)
+# Pass the YAML string from session state to the parsing function
+assessment_criteria_dict = parse_criteria_yaml(st.session_state.get('criteria_content'))
+
 if assessment_criteria_dict:
     st.info("✅ Assessment criteria document is loaded and ready for questions.")
 else:
@@ -151,7 +137,7 @@ if prompt := st.chat_input("Ask about your assessment results or the rules..."):
                 max_match_count = 0
                 prompt_words = set(prompt.lower().split())
 
-                for key in assessment_criteria_dict:
+                for key, content in assessment_criteria_dict.items():
                     key_words = set(key.lower().split())
                     match_count = len(prompt_words.intersection(key_words))
 
