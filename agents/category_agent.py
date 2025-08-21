@@ -129,10 +129,17 @@ class Agent(BaseAgent):
             "ALCOHOL": ["ALCOHOL_L1_NAME", "ALCOHOL_L2_NAME"],
             "CNG": ["CNG_L1_NAME", "CNG_L2_NAME"],
             "GROCERY": ["CNG_L1_NAME", "CNG_L2_NAME"],
-            "HOME IMPROVEMENTS": ["HOME_IMPROVEMENT_L1_NAME", "HOME_IMPROVEMENT_L2_NAME"],
+            "HOME IMPROVEMENT": ["HOME_IMPROVEMENT_L1_NAME", "HOME_IMPROVEMENT_L2_NAME"],
             "BEAUTY": ["BEAUTY_L1_NAME", "BEAUTY_L2_NAME"],
             "PRODUCE": ["PRODUCE_L1_NAME", "PRODUCE_L2_NAME"],
-            "OTHER": ["OTHER_L1_NAME", "OTHER_L2_NAME"]
+            "OTHER": ["OTHER_L1_NAME", "OTHER_L2_NAME"],
+            "SPORTS": ["SPORTS_L1_NAME", "SPORTS_L2_NAME"],
+            "ELECTRONICS": ["ELECTRONICS_L1_NAME", "ELECTRONICS_L2_NAME"],
+            "PETS": ["PET_L1_NAME", "PET_L2_NAME"],
+            "PARTY": ["PARTY_L1_NAME", "PARTY_L2_NAME"],
+            "PAINT": ["PAINT_L1_NAME", "PAINT_L2_NAME"],
+            "SHOES": ["SHOES_L1_NAME", "SHOES_L2_NAME"],
+            "OFFICE": ["OFFICE_L1_NAME", "OFFICE_L2_NAME"]
         }
         
         # Look for the vertical's columns in the case-insensitive map
