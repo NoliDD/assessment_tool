@@ -1,0 +1,245 @@
+msid:
+  overview: |
+    Need: A single MSID provided per SKU
+    For net new Mxs to DoorDash, ensure that we understand what the SOT SKU is if there are multiple columns. We must have this present on all items, without a SKU items cannot be built.
+
+    If there are duplicate SKU numbers with different item descriptions, there may be A-MSIDs. DoorDash would need to generate unique SKUs for the different versions of an item. Make note in the Commentary on the Data column.
+
+    💡 A-MSIDs are one SKU number to sell a branded product in different ways. Examples being multiple listings of a SKU for a 6 pack of beer where the Mx sells this product by the 6-pack or one beer at a time. DoorDash will need to generate SKUs to differenciate the products. We have also seen this for Meat & Fish SKUs where one version of the SKU is sold by Weight and another sold at a fixed price.
+  instructions: |
+    At Start: If you are unable to find a SOT MSID column, there are multiple unique identifying numbers, or only UPCs, reach out and verify with the EPM/TAM via submission thread to determine what the MSID column should be.
+
+    1. Check for blank SKUs or "Default_Value". Provide the total number of coverage by inputting the number of valid SKUs in # of SKUs w/ Attribute Coverage column
+    2. Perform a duplicate check on the MSID column to account for all dupes then add the total amount of dupes to the Attribute-Specific Inputs section (if working with multiple businesses at once there may be duplicates between the businesses, concatenate the BizID & MSID into a new column to run the dupe check)
+
+upc:
+  overview: |
+    Need: A single UPC per SKU
+    If there is no UPC the item cannot be built on Green Pipe. We are unable to scrape for UPCs with vendor assistance as well, so non-UPC products will be excluded.
+    For Baseline SKU, "default_UPC" is the same as "blank".
+  instructions: |
+    1. Check for blank UPCs or "Default_Value" and then provide total number of coverage by inputting the number of usable UPCs within # of SKUs w/ Attribute Coverage
+    2. Check the UPCs for duplicates
+       - Filter out the Blank/default_UPC from the results
+       - Notate the number of dupes in the Attribute-Specific Inputs cell
+    3. Check that the UPCs are valid by filtering the UPC column from A - Z, scroll rapidly through the UPCs to check for any of the bad examples where the UPCs may not be valid UPC numbers, such as: too small of numbers, letters and numbers (depending on the Vertical (CnG should usually have only numbers, speciality MXs (ACE Hardware, etc. may have alphanumeric)), UPCs that don't match the traditional format of: 00810404020685
+       - It's okay if they do not have leading zeroes or are not exactly 12 digits
+
+image_url:
+  overview: |
+    Merchants should send photos in URL format
+    Note: We currently do not have a method to upload separate file folders of photos to the bulk tool in Green Pipe using the S3 Photo Upload workflow
+    We need to check that the photos are healthy links that have URLs compatible with the bulk tool, such as: beginning with http:// or https:// and that their file type is compatible with the Green Pipe tool, check this by running the sample batch through the bulk photo tool as described below. Hint: .JPEG, .JPG, and .PNG file types are common successes, .AVIF file types will fail, you can check the URLs en masse for .AVIF file types by using this formula: =IF(RIGHT(J2, 5) = ".avif", "fail", "pass")
+       - If the URLs fail within the bulk tool then they also fail Green Pipe
+    We also need to spot check that photos are high quality, good resolution, and generally match our style-guide
+    File Size: Under 2 MB
+    Aspect Ratio: Landscape (16:9)
+    URL Type: Starts with http:// or https://, not an .AVIF file
+    Resolution Size: 1400 x 800px minimum
+  instructions: |
+    1. Bulk check the URLs from top to bottom to look at format. Do they start with http:// or https:// and are not an .AVIF file? Hint: You can utilize filtering with Contains to filter to different types of URLs.
+    If there are many different formats to URLs then the images are subject to have varying quality and should be put on our radar to take a closer look!
+    2. Spot-check 15 photos,
+    3. Take a sample of 50 URLs and run them through the URL bulk tool. If there are a variety of photo URLs, take a healthy sample of each type of URL to run through the tool. Utilize the Photo_ID Test tab to run through the tool.
+       - Import the URL upload into the Photo_Results Import Here tab and use the =image(A2) formula to see if the photos returned are healthy and working
+    Make sure to flag if you find instances of placeholder photos, where the mx is sending "Image Coming Soon", or generic images rather than a photo of the item
+
+brand_name:
+  overview: |
+    Check if the Merchant provided brands in their catalog. We want to see good coverage on branded items, if the Mx provides a brand column which is missing values on items where it is clearly branded in the item name then we are looking at inconsistent data which we cannot brand map with.
+  instructions: |
+    1. Confirm that the Mx is sending the brand within its own column, separate from the item name
+    2. Determine the amount of brand coverage and input total within the # of SKUs w/ Attribute Coverage column. Be sure to look out for default_brand or placeholder brands that are not accurate.
+    2. Check for Brand parity with the Item Name. Are these brands accurate to the items? Look for instances where items do have a brand within the name or photo but are missing from the merchant-provided brand column.
+       - Look for items that may be sent as Unbranded and confirm that they are indeed brandless items, ex: Produce
+       - Check that private labeled brands are included
+         - Example of private label brands: DSG for Dick's, Good & Gather for Target, etc.
+
+item_name:
+  overview: |
+    Item Names are by far the trickiest to assess. We are ultimately looking for Item Names that are:
+
+    1. Consistent across the Mx's data. The format is the same for all similar products, especially products under the same brand
+    2. Not missing attributes that clarify what the product is, ex: Pringles Pizza, instead of Pringles Pizza Potato Chips
+    3. Close to the format we would have them in the Style Guide; [Brand] [Dietary Tag] [Variation] [Item Name] [Container] [Size & UOM]
+
+    Another nuance to look out for is if the Merchant is on the Nexla integration type. If so, we have the option to manipulate their data to concatenate the necessary info into a single Item Name.
+
+    For example, when the Name, Variant, Brand, Size, and UOM are in separate columns can we use one formula on all of that data to make a perfectly-formatted Item Name? Or, is the data inconsistent and the formula would need to change depending on the item? Or, are attributes repeated multiple times within a row across different columns? For example, the Brand is in the brand column and also within the Item Name column, so if we concatenated them it would be duplicated in the final name (Coca-Cola Coca-Cola Cherry Soda)
+
+    Here are the scenarios that names may be in:
+    Scenario 1 ( FOR NEXLA MXs ONLY): We are looking for Item name-related data to be provided and separated into different columns where we could concatenate the data into a complete title (size, brand, variant)
+    OR
+    Scenario 2: The Mx provides an item name exactly as it should be uploaded into catalog (including brand, size, variant info) - in the following order: brand > variant > item name > size
+  instructions: |
+    Nuance: For Scenario 1 on a Nexla Mx:
+    1. Sort the Item Name column from A - Z and scroll rapidly through the item names, look to see if the item names are in a consistent format. For example, if you are looking at a Kit-Kat branded item, check that the flavor is not missing on some, that the brand name is not formatted differently (Kit-Kat vs KitKat vs Kitkat, etc.), the order of attributes do not change (flavor before size and then size before flavor, etc.), capitalization does not change, etc. In general, check:
+
+    a. Do the item names make sense? Click into the photo or do a barcode look up, are there details missing to describe the product that you can spot in the product image/barcode lookup? Are these important to the customer?
+    b. Are there formatting issues? Is the naming inconsistent and attributes are far off from our Style Guide?
+    c. Is there a space between the Size and Unit of Measure?
+    d. Are there abbreviations in the item names? Are words spelt correctly? Are names in title-casing (Coca-Cola vs Coca-cola)?
+
+    2. Select 30 SKUs across multiple categories and review the item names within the Item Name + Size Review [30 SKUs] tab
+    3. Complete a duplicate check on the item names. How many duplicates are there? Look into the UPCs and photos, are these duplicate items because there are missing details in the item name?
+
+    💡 Consider This: Duplicates could indicate that the Mx is missing key information in their data. Where there may be multiple appearances of "Powerade Sports Drink 12 Oz" it may be because the Mx is not sending the flavor to make this a distinct item.
+
+size:
+  overview: |
+    Need: A size provided per SKU, the merchant will provide this in multiple ways:
+    Scenario 1: The size will be provided with just a numerical value and the UOM will be within a separate Unit of Measure column
+    OR
+    Scenario 2: The Size will be provided within a single column and there is no Unit of Measure (if so, ignore the Unit of Measure column)
+    OR
+    Scenario 3: There may be an additional size for extended sizing which will need to be considered, these are rarely seen but happens often with Alcohol merchants where they have a third column for their pack size. We would need to combine all of these to make a single extended size (ex: Size = 12, UOM = oz, Extended Sizing = 6 ct; all of these would be combined to make 12 oz x 6 ct)
+  instructions: |
+    Filter the Size column from A - Z to group the same sizes together. Scroll through the sheet looking for consistency and coverage.
+
+    1. Determine the size coverage and input within # of SKUs w/ Attribute Coverage. Look out for default_size or other mx-specific placeholders, do not include those in your coverage count as these are to be considered as missing/blank.
+    2. Review the quality of the sizes by looking through the information and reviewing the details
+    a. Are sizes accurate to information within the item name? Is there one size in the item name which contradicts the size column?
+    b. Are sizes in a clean format that is easy for the customer to understand?
+    c. Are there any sizes that are generic or don't accurately inform how much of the product that a shopper would recieve (COUNT, EACH, ONE) (For example, Bluberries (ONE), the Cx would not actually be receiving one blueberry)
+
+unit_of_measure:
+  overview: |
+    Scenario 1: The Size will be provided with just a numerical value and the UOM will be within a separate Unit of Measure column.
+    OR
+    Scenario 2: The Size will be provided within a single column and there is no Unit of Measure (if so, ignore the Unit of Measure column)
+  instructions: |
+    For an easy review, copy and paste all the UOMs into a blank tab, highlight the column, select Data > Data Cleanup > Remove Duplicates. This will allow you to see each unique UOM.
+
+    Filter the size column from A - Z to group the same UOMs together. Scroll through the sheet looking for consistency and coverage.
+
+    1. Check the total coverage of the UOM and input the total within the # of SKUs w/ Attribute Coverage column
+    2. Review the coverage compared to the Size column
+    a. Are there inconsistencies where the Size column contains the entire size and UOM on some items and not the others?
+    b. Are there multiple instances of spelling and formatting for the same UOM, such as "Milliliter" , "ML", "Mili", etc.?
+    c. Are UOMs in a clean format that is easy for the customer to understand? For example, SF should not be used for sq ft.
+
+taxonomy:
+  overview: |
+    What we are looking out for is if the Mx has too broad of categories where we would not be able to place items accurately into a DoorDash Category Taxonomy.
+    Example: the Mx provides the category "Beer" and within are IPA, Pilsners, Stouts, etc. We will not be able to apply a DoorDash Category 1:1 for the Mx's category of "Beer" since Beer is a sub-category on DoorDash but was submitted as a Main category by the Mx.
+
+    The Taxonomy can come in multiple formats:
+    Scenario 1: In a concatenated string of categories within one column (ex: Cat 1 > Cat 2 > Cat 3 > Cat 4)
+    Scenario 2: In multiple category columns from most broad parent categories to finer sub-categories (Cat 1 next to Cat 2 next to Cat 3 next to Cat 4)
+
+    Context: The purpose of Taxonomy review is to determine if items are placed in distinct categories that we can map to DoorDash categories.
+    Blanket categories like Gifts and Best Sellers, where categories are filled with a variety of items, is another red flag to watch out for.
+  instructions: |
+    If there are multiple category columns, concatenate the categories into a single tree so you can review the total number of category paths provided.
+
+    Copy the column of categories and paste into a separate, blank tab. Highlight the column on this new tab, select Data > Data Cleanup > Remove Duplicates. This will allow you to see each unique category, add to the Total Number of Unique Categories cell.
+
+    Look through 10 different categories and use your best judgment to select likely popular selling categories, review the items attached to the categories.
+
+    A: Are there distinct relationships between the SKUs under each category? Are the items under the relevant to the category? Are the categories too broad and many different kinds of items are under the category?
+    Example: Too broad of a category would be Beer where the items under that category would be every type of beer. Compare it to DoorDash's taxonomy selections, we want granular categories to easily group products.
+
+restricted_items:
+  overview: |
+    This is the restricted item flag that will need to be utilized to tag age-restricted items on DoorDash. These can be marked in different ways, most come with a TRUE or FALSE statement.
+
+    This is required for:
+    - Alcoholic beverages with => 0% ABV (includes non-alcoholic beer, wine, spirits & Bitters)
+    - CBD Items
+    - THC Items
+    - Over-the-counter products with dextromethorphan, pseudoephedrine, or any other age-restricted ingredients
+    - Nicotine Replacement Therapy (NRT) products
+    - Dietary supplements for weight loss or muscle building (to comply with law in NY that prohibits sale to those under 18)
+  instructions: |
+    1. Check for columns that are marking restricted items and add the title of the column to this sheet within column L
+    2. Filter out the restricted items then check if there are any other items that should be restricted but are not. Use the Mx's categories to check for other restricted items.
+    Hint: Some mixers or bitters can be places where inconsistencies are found. Be sure to check for CBD and THC items as well.
+
+items_doordash_cant_sell:
+  overview: |
+    Here we are looking for restricted items that we cannot set live on DoorDash, see Excluded items. For Green Pipe, all Mx SKUs are uploaded so the only way we can manage a green pipeline merchant and halt items from going live on the platform is if these can be marked by either category or a Mx-provided column.
+
+    If the Mx has a column that can mark items that should not be sold on DoorDash, this can be flagged within this assessment and used to stop all these from being built.
+    If the Mx has categories that house all of the restricted items, we can list all of the categories that should not be built on DoorDash and ENG will exclude these from Green Pipe.
+
+    Where we have issues is when there is not good category coverage to find all of the items we cannot set live onto DoorDash. An example being when there are categories that house items we want to build and items we don't want to build.
+  instructions: |
+    1. Start sorting categories A - Z and look through different categories that may be restricted (Tobacco, Vapes, Knives, etc.)
+    2. Check for patterns. When you find restricted items, are they under categories that can be restricted completely? (All items in the category are restricted items)
+    3. Are there other restricted items that are not easily found by categories? An example is when items are too big (refrigerators, beer kegs, etc.).
+    4. List all of the restricted item categories. Leave detailed notes if there are other restricted items found in categories that also contain non-restricted items.
+
+product_group:
+  overview: |
+    Product Groups are optional depending on the type of merchant and the items being sold. Beauty, clothing, and sports stores, etc. need Product Groups. It is a worthy endeavor in order to improve Cx shopping on our platform.
+    We will use exactly what the Mx sends as our SOT, if they are sending us Product Groups that are not grouping products well, then we need to flag those issues.
+  instructions: |
+    1. Determine the number of Product Groups and input the total within the # of SKUs w/ Attribute Coverage column
+    2. Sort the Product Groups from A - Z to review the items within the group. Are they all products under the same brand and type of product?
+    3. Look for items under the same brand, check if Product Groups are missing other items that should be grouped
+
+variant:
+  overview: |
+    Variants are a free space attribute to filter the product groups by. With the product groups you have reviewed for the Mx, determine if the Variants that the Mx provided make sense.
+    We are looking for color, flavor, scent, etc. These can only be uploaded into one column so if there are multiple columns of variants, we will need to see if there are too many variants to support or if we can concatenate into one SOT variant column.
+  instructions: |
+    1. Determine the total Variants and input within the # of SKUs w/ Attribute Coverage column
+    2. Sort the Product Groups from A - Z to review the Variants within the group
+       - Ensure they are spelled correctly and easy to understand without editing
+       - Determine if there are multiple variants for one SKU, if so, refer to #3
+       - Ensure the Variants are generally consistent with product groups and have one variant that can be used to sort the different products under that group
+    3. Check if there are more than 2 variants (we cannot support more than 2 Variants currently due to catalog building limitations)
+
+aux_photos:
+  overview: |
+    Auxiliary Photos should have the same quality that we are looking for in the front-facing photos. What we are also looking for is if they are distinct from the front-facing photos.
+  instructions: |
+    1. Determine the number of Auxiliary Photos and input within the # of SKUs w/ Attribute Coverage column
+    2. Determine the number of SKUs where the Auxiliary Photo is on a SKU that is missing the front-facing photo, we cannot use these (all SKUs must have a "main" (front-facing) photo)
+    3. Check the URLs on these for quality issues (begin with http(s), are not AVIF files, etc.)
+       - Are these distinct photos? or is the Mx sending us mulitples of the same exact photo over and over?
+       - Are there general quality issues?
+
+details:
+  overview: |
+    Descriptions are detailed paragraphs for the product. We are going to upload directly what the Mx has provided without editing so we need clear English paragraphs with comprehensible descriptions.
+    The format for these can either be in HTML strings or in plain text. We are going to need to avoid unecessary symbols, unclear, abbreviated wording, and other issues that don't make this a simple, English paragraph.
+  instructions: |
+    1. Determine the number of descriptions and input within the # of SKUs w/ Attribute Coverage column
+    2. Mark the format of the descriptions within the Commentary on the Data column
+    3. Review a sample of SKUs' descriptions
+       - Are they full of restricted symbols?
+       - Are they unclear and unable to be uploaded without editing the paragraphs?
+
+weighted_items:
+  overview: |
+    For items that are weighted we need to be able to identify and separate these out from auto-build (Green Pipe) in current state. We need a consistent marking supplied by the merchant to indicate which items they are selling are sold by weight.
+  instructions: |
+    1. Look through the data and identify the Weighted Item column
+    2. Filter out the weighted items, identify if there are other items which may be sold by weight that are not marked by this column, indicating that the merchant's weighted item flag is inconsistent.
+
+average_weight:
+  overview: |
+    For items that are sold in packages where the weight determines the price, we need the Mx to be send average weights that are accurate to the item.
+    Average Weights need to be in LB (for US MXs) or KG (for International MXs) (No need to check if the Mx is in the US or abroad, just check that the Avg Weight is one of those two)
+  instructions: |
+    1. Filter the Weighted Item flag column to identify items that are weighted (Is_Weighted = TRUE)
+    2. Review the average weights by comparing the average weight to the item and gut-checking that the information is accurate (a watermelon probably won't be 1 LB)
+       - Are there items that are easily identifiable as Count/Weight which do not have an average weight provided? (Average Weight ONLY applies to Count/Weight items)
+       - Are average weights in ounces or other sizes besides LB or KG? (Can only be in LB or KG)
+
+plu:
+  overview: |
+    For CnG MXs ONLY
+    4 or 5 digit PLU provided for applicable Produce SKUs
+  instructions: |
+    Filter the Mx's categories to the Produce items, review if there is a singular PLU column or if there are 4 - 5 digit UPCs within the UPC column.
+    Check to see that these are provided, if they have leading zeroes (ex: 000000001234), that is acceptable.
+
+snap:
+  overview: |
+    For CnG MXs Only
+    Items that are SNAP eligible should be tagged with a True or False value or have some SOT tagging which lets us know that they are SNAP eligible.
+  instructions: |
+    Review the Mx's data to find SNAP tagging and check how items are flagged as SNAP eligible.
+    Filter to the items that are SNAP eligible, check to see if Alcohol items are tagged as SNAP eligble, this would be problematic and we want to avoid.

@@ -1,0 +1,111 @@
+{
+  "version": "v1",
+  "source": "sku_coverage.csv",
+  "rules": [
+    {
+      "attribute": "Merchant Supplied ID (MSID)",
+      "vertical": "All Verticals",
+      "requirement": "Required",
+      "coverage_rule_text": "100% Coverage Minimum (Fails if Under)"
+    },
+    {
+      "attribute": "UPC",
+      "vertical": "All Verticals",
+      "requirement": "Required",
+      "coverage_rule_text": "80% Coverage Minimum (Fails if Under)"
+    },
+    {
+      "attribute": "Photo URL",
+      "vertical": "All Verticals",
+      "requirement": "Required",
+      "coverage_rule_text": "80% Coverage Minimum (Fails if Under)"
+    },
+    {
+      "attribute": "Brand",
+      "vertical": "All Verticals",
+      "requirement": "Required",
+      "coverage_rule_text": "80% Coverage Minimum (Fails if Under)"
+    },
+    {
+      "attribute": "Item Name",
+      "vertical": "All Verticals",
+      "requirement": "Required",
+      "coverage_rule_text": "100% Coverage Minimum (Fails if Under)"
+    },
+    {
+      "attribute": "Size",
+      "vertical": "All Verticals",
+      "requirement": "Required",
+      "coverage_rule_text": "80% Coverage Minimum (Fails if Under)"
+    },
+    {
+      "attribute": "Unit Of Measure",
+      "vertical": "All Verticals (where applicable)",
+      "requirement": "Required",
+      "coverage_rule_text": "80% Coverage Minimum (Fails if Under)"
+    },
+    {
+      "attribute": "Mx Taxonomy",
+      "vertical": "All Verticals",
+      "requirement": "Required",
+      "coverage_rule_text": "80% Coverage Minimum (Fails if Under)"
+    },
+    {
+      "attribute": "Age-Restricted Item Identification\n(Alcohol, CBD/THC, etc.)",
+      "vertical": "All Verticals, specifically relevant to:  Alcohol, CnG, CBD/THC",
+      "requirement": "Required",
+      "coverage_rule_text": "Fails if Age-Restricted items are Not Marked"
+    },
+    {
+      "attribute": "Data Excludes Items that DoorDash Can't Sell",
+      "vertical": "All Verticals",
+      "requirement": "Required",
+      "coverage_rule_text": "Fails if there are Categories of Items which are Restricted"
+    },
+    {
+      "attribute": "Product Group",
+      "vertical": "Needed for: Beauty, Shoes, Paint",
+      "requirement": "Required",
+      "coverage_rule_text": "80% Coverage Minimum (Fails if Under)"
+    },
+    {
+      "attribute": "Variant",
+      "vertical": "Needed for: Beauty, Shoes, Paint",
+      "requirement": "Required",
+      "coverage_rule_text": "80% Coverage Minimum (Fails if Under)"
+    },
+    {
+      "attribute": "Aux Photo URLs",
+      "vertical": "All Verticals",
+      "requirement": "Nice to Have"
+    },
+    {
+      "attribute": "Details",
+      "vertical": "All Verticals",
+      "requirement": "Nice to Have"
+    },
+    {
+      "attribute": "Weighted Items Identification Column",
+      "vertical": "CnG",
+      "requirement": "Required",
+      "coverage_rule_text": "Fails if Weighted Items are Not Clearly Marked"
+    },
+    {
+      "attribute": "Average Weight",
+      "vertical": "CnG",
+      "requirement": "Required",
+      "coverage_rule_text": "100% Coverage on Count/Weight Weighted items (Fails if Under)"
+    },
+    {
+      "attribute": "Price Look-Up Code (PLU)",
+      "vertical": "CnG",
+      "requirement": "Required",
+      "coverage_rule_text": "80% Coverage Minimum (Fails if Under)"
+    },
+    {
+      "attribute": "SNAP",
+      "vertical": "CnG",
+      "requirement": "Nice to Have"
+    }
+  ]
+}
