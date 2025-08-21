@@ -140,10 +140,10 @@ Here is the data:
 
     def load_guidelines(self):
         try:
-            with open('guidelines.yaml', 'r') as f:
+            with open('restricted_items.yaml', 'r') as f:
                 data = yaml.safe_load(f)
                 restrictions = data.get('restrictions', [])
                 return self._flatten_guidelines(restrictions)
         except Exception as e:
-            logging.warning(f"Failed to load guidelines.yaml: {e}")
+            logging.warning(f"Failed to load restricted_items.yaml: {e}")
             return []
