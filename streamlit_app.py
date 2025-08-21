@@ -5,9 +5,11 @@ import importlib
 import inspect
 import logging
 from io import BytesIO
-from reporting import generate_summary_text # Assuming these are your custom modules
-from utils import validate_api_key # Assuming these are your custom modules
-from agents.api_tracker import ApiUsageTracker # <-- Import the new tracker
+from reporting import generate_summary_text
+from utils import validate_api_key
+from agents.api_tracker import ApiUsageTracker
+import json
+import yaml
 
 # --- Page Setup ---
 st.set_page_config(layout="wide", page_title="Mx Data Assessment Tool", page_icon="✨🚀")
@@ -117,7 +119,6 @@ def load_css():
                 
         </style>
     """, unsafe_allow_html=True)
-
 
 
 # --- Initialize Session State ---
@@ -295,30 +296,45 @@ with st.sidebar:
         index=["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"].index(st.session_state.ai_model))
     st.session_state.website_url = st.text_input("Merchant Website URL", value=st.session_state.website_url)
     uploaded_file = st.file_uploader("1. Upload Merchant Data File", type=["csv", "xlsx"])
-    taxonomy_file = st.file_uploader("2. Upload Taxonomy CSV (Optional)", type=["csv"])
-    criteria_file = st.file_uploader("3. Upload Assessment Criteria (.docx, Optional)", type=["docx"])
+    # The taxonomy file is now loaded locally, so no uploader is needed.
     if uploaded_file:
         st.session_state.uploaded_file_content = uploaded_file.read()
         st.session_state.uploaded_file_name = uploaded_file.name
-    if taxonomy_file:
-        st.session_state.taxonomy_df = pd.read_csv(taxonomy_file)
-    if criteria_file:
-        st.session_state.criteria_content = criteria_file.read()
+    
+    # Load local taxonomy file
+    try:
+        if os.path.exists('taxonomy.json'):
+            with open('taxonomy.json', 'r') as f:
+                taxonomy_data = json.load(f)
+                st.session_state.taxonomy_df = pd.DataFrame(taxonomy_data['taxonomy'])
+            st.success("Taxonomy Loaded")
+        else:
+            st.warning("No local 'taxonomy.json' found. Taxonomy-based agents will be limited.")
+    except Exception as e:
+        st.error(f"Error loading local taxonomy file: {e}")
+        st.session_state.taxonomy_df = None
+        
+    # Load local criteria file
+    try:
+        with open('assessment_instructions.yaml', 'r') as f:
+            st.session_state.criteria_content = f.read()
+        st.success("Assessment Criteria Loaded")
+    except FileNotFoundError:
+        st.warning("No local 'assessment_instructions.yaml' found. The chatbot will have limited knowledge of specific rules.")
+        st.session_state.criteria_content = None
+
     if st.session_state.uploaded_file_content:
         st.success(f"File in memory: **{st.session_state.uploaded_file_name}**")
-    if st.session_state.taxonomy_df is not None:
-        st.success("Taxonomy Loaded")
-    if st.session_state.criteria_content is not None:
-        st.success("Assessment Criteria Loaded")
+        
     st.divider()
-    verticals = ["Grocery", "Alcohol", "Home Improvements", "Beauty", "Produce", "Other"]
+    verticals = ['CnG', 'Alcohol', 'Office', 'Home Improvement', 'Beauty', 'Sports', 'Electronics', 'Pets', 'Party', 'Paint', 'Shoes']
     st.session_state.vertical = st.selectbox("Select Business Vertical", options=verticals,
                                              index=verticals.index(st.session_state.vertical))
     st.session_state.is_nexla = st.toggle("Nexla Enabled Merchant?", value=st.session_state.is_nexla)
     default_guides = {
-        "Grocery": "[Brand] [Dietary Tag] [Variation] [Item Name] [Container] [Size & UOM]",
+        "CnG": "[Brand] [Dietary Tag] [Variation] [Item Name] [Container] [Size & UOM]",
         "Alcohol": "[Brand] [Dietary Tag] [Flavor] [Variation] [Size] [Color] [Age] [Item Name] [Container] [Appellation Location] [Vintage Year] [Size & UOM]",
-        "Home Improvements": "[Brand] [Material/Fabric] [Power] [Variation] [Size] [Color] [Scent] [Item Name] [with Accessories]",
+        "Home Improvement": "[Brand] [Material/Fabric] [Power] [Variation] [Size] [Color] [Scent] [Item Name] [with Accessories]",
         "Beauty": "[Brand] [Item Name] [Product Type] [Variation] [Size] [Scent] [Color][Size & UOM]",
         "Produce": "[Brand] [Variety] [Item Name] [Container] [Size & UOM]",
         "Other": "[Brand] [Item Name] [Size & UOM]"
@@ -336,6 +352,7 @@ st.title("✨🚀 Merchant Data Assessment Tool")
 # --- Empty State / Welcome Message ---
 if not st.session_state.assessment_done and not run_button:
     st.info("👋 Welcome! Upload your data and configure the settings in the sidebar to begin.")
+    st.markdown("ℹ️ Note: The assessment rules and taxonomy are now embedded in the app.")
 
 # Create a placeholder for the status message
 status_placeholder = st.empty()
