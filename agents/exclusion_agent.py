@@ -29,7 +29,7 @@ class Agent(BaseAgent):
             df.loc[alcohol_mask, self.issue_column] += "⚠️ Excluded: Marked as an Alcohol item. "
 
         # Manual exclusion based on restricted keywords in categories
-        restricted_keywords = ["magazine", "subscription", "gift card", "lottery", "fireworks", "weapon"]
+        restricted_keywords = ["magazine", "subscription", "gift card", "lottery", "fireworks", "weapon", "medicine", "vape"]
         def check_restricted_category(row):
             l1 = str(row.get("L1_CATEGORY", "")).lower()
             l2 = str(row.get("L2_CATEGORY", "")).lower()
