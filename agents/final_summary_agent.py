@@ -149,10 +149,10 @@ def infer_vertical(full_report: dict, summary_df: Optional[pd.DataFrame]) -> Opt
                     return str(vals[0])
     return None
 
-def collect_attribute_coverage(summary_df: Optional[pd.DataFrame]) -> Dict[str, Tuple[int, int, int]]:
+def collect_attribute_coverage(summary_df: Optional[pd.DataFrame]) -> Dict[str, Dict[str, Any]]:
     """
-    Collect per-attribute coverage, issue counts, and duplicate counts.
-    Returns a dict with key: (issue_count, coverage_count, duplicate_count).
+    Collect per-attribute metrics, including issue counts, coverage counts, and other details.
+    Returns a dict with key: dict of metrics.
     """
     out = {}
     if summary_df is not None:
@@ -162,12 +162,17 @@ def collect_attribute_coverage(summary_df: Optional[pd.DataFrame]) -> Dict[str, 
             issue_count = row.get('Issues Found', 0)
             coverage_count = row.get('coverage_count')
             duplicate_count = row.get('duplicate_count')
-            
-            out[_normalize(attr).lower()] = (issue_count, coverage_count, duplicate_count)
-            
+
+            metrics = {
+                "issue_count": issue_count,
+                "coverage_count": coverage_count,
+                "duplicate_count": duplicate_count,
+            }
+            out[_normalize(attr).lower()] = metrics
+
     return out
 
-def evaluate_against_rules(attr_metrics: Dict[str, Tuple[int, int, int]], rules: pd.DataFrame, total_skus: int, full_report: dict) -> Dict[str, Any]:
+def evaluate_against_rules(attr_metrics: Dict[str, Dict[str, Any]], rules: pd.DataFrame, total_skus: int, full_report: dict) -> Dict[str, Any]:
     """
     Compare provided attribute metrics against the vertical rules.
     Returns a dict with pass/fail lists and counts, now including qualitative issues.
@@ -185,14 +190,12 @@ def evaluate_against_rules(attr_metrics: Dict[str, Tuple[int, int, int]], rules:
         cov_text = r.get("coverage_rule_text", None)
         
         # Get metrics for this attribute
-        metrics = attr_metrics.get(_normalize(attr).lower(), (0, None, None))
-        issue_count, coverage_count, duplicate_count = metrics
+        metrics = attr_metrics.get(_normalize(attr).lower(), {})
+        issue_count = metrics.get("issue_count", 0)
+        coverage_count = metrics.get("coverage_count")
         
         record = {
-            "attribute": attr, 
-            "issue_count": issue_count, 
-            "coverage": coverage_count, 
-            "duplicates": duplicate_count,
+            "attribute": attr,
             "rule_text": cov_text,
             "requirement": req
         }
@@ -202,37 +205,32 @@ def evaluate_against_rules(attr_metrics: Dict[str, Tuple[int, int, int]], rules:
             continue
 
         # Check for numeric coverage threshold
+        has_issue = False
+        reasons_list = []
         if total_skus > 0:
             coverage_rate = (coverage_count / total_skus) if coverage_count is not None else None
             coverage_threshold = _parse_coverage(cov_text)
-            
+
             if req == "Required":
-                has_issue = False
-                
                 # Check for numeric coverage failure
                 if coverage_threshold is not None and (coverage_rate is None or coverage_rate < coverage_threshold):
-                    record["coverage_rate"] = coverage_rate
-                    record["coverage_threshold"] = coverage_threshold
+                    reasons_list.append(f"{attr} coverage rate ({coverage_rate:.2f}) below threshold ({coverage_threshold})")
                     has_issue = True
                 
-                # Check for non-numeric, qualitative failures ("Fails if...")
+                # Check for qualitative issues ("Fails if...")
                 if "Fails if" in str(cov_text):
-                    # Check if the issue count for this attribute is greater than 0
                     if issue_count > 0:
+                        reasons_list.append(f"{attr} qualitative issue detected: '{cov_text}'")
                         has_issue = True
-                
-                # Check for missing data in a required attribute without a specific rule
-                if coverage_threshold is None and coverage_count is None:
-                    has_issue = True
                 
                 # Check for AI's "Missing or Unusable" score from the full_report
                 report_key = next((k for k in full_report.keys() if _normalize(k) == _normalize(attr)), None)
                 if report_key and full_report[report_key].get('assessment', 'N/A') == "Missing or Unusable":
-                    record["assessment_score"] = full_report[report_key].get('assessment', 'N/A')
+                    reasons_list.append(f"{attr} AI assessment score is 'Missing or Unusable'")
                     has_issue = True
 
-
                 if has_issue:
+                    record["reasons"] = reasons_list
                     required_fails.append(record)
                 else:
                     required_passes.append(record)

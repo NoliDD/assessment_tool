@@ -1,0 +1,20 @@
+assessment_tool/
+├── agents/
+│   ├── __init__.py
+│   ├── base_agent.py
+│   ├── brand_agent.py
+│   ├── category_agent.py
+│   ├── final_summary_agent.py
+│   ├── msid_agent.py
+│   ├── ... (other agents)
+│   └── upc_agent.py
+├── pages/
+│   └── 💬_2_Chat_with_Report.py
+├── .env
+├── .gitignore
+├── assessment_instructions.yaml
+├── restricted_items.yaml
+├── requirements.txt
+├── sku_coverage_rules.json
+├── streamlit_app.py
+└── taxonomy.json

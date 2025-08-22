@@ -1,10 +1,11 @@
 from .base_agent import BaseAgent
 import pandas as pd
 import requests
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import random
 from tqdm import tqdm
 import logging
+import json
 
 class Agent(BaseAgent):
     def __init__(self):
@@ -17,6 +18,7 @@ class Agent(BaseAgent):
         """
         logging.info(f"Running {self.attribute_name} Agent...")
         self.issue_column = 'ImageIssues?'
+        df[self.issue_column] = ''
         
         if 'IMAGE_URL' not in df.columns:
             df[self.issue_column] = 'Column not found.'
@@ -25,18 +27,25 @@ class Agent(BaseAgent):
         # Use a temporary column to accumulate errors
         df['temp_image_errors'] = ''
         ALLOWED_EXT = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'tiff', 'bmp'}
-
+        
         def check_url_format(url):
             if not isinstance(url, str) or not url.strip(): return "❌ Not a string or blank. "
-            if not url.lower().startswith(('http://', 'https://')): return "❌ Invalid URL protocol. "
-            if url.lower().endswith('.avif'): return "❌ Invalid file type (.avif). "
-            path = url.lower().split('?', 1)[0]
+            url_lower = url.lower()
+            
+            if not url_lower.startswith(('http://', 'https://')): return "❌ Invalid URL protocol. "
+            if url_lower.endswith('.avif'): return "❌ Invalid file type (.avif). "
+            
+            # Check for placeholder keywords in the URL
+            if any(keyword in url_lower for keyword in ['placeholder', 'coming-soon', 'no-image', 'default-image']):
+                return "❌ Placeholder image detected in URL. "
+
+            path = url_lower.split('?', 1)[0]
             ext = path.rsplit('.', 1)[-1] if '.' in path else ''
             if ext not in ALLOWED_EXT: return f"❌ Unexpected extension (.{ext}). "
             return ""
 
         df['temp_image_errors'] += df['IMAGE_URL'].apply(check_url_format)
-
+        
         valid_format_df = df[df['temp_image_errors'] == '']
         if not valid_format_df.empty:
             sample_size = min(500, len(valid_format_df))
@@ -64,3 +73,36 @@ class Agent(BaseAgent):
         df[self.issue_column] = df['temp_image_errors'].apply(lambda x: x.strip() if x else '✅ OK')
         df.drop(columns=['temp_image_errors'], inplace=True)
         return df
+
+    def get_summary(self, df: pd.DataFrame) -> dict:
+        """
+        Generates a summary dictionary with detailed metrics for the Image attribute.
+        """
+        if 'IMAGE_URL' not in df.columns or 'ImageIssues?' not in df.columns:
+            logging.warning(f"Image summary failed: Missing required columns 'IMAGE_URL' or 'ImageIssues?'.")
+            return {"name": self.attribute_name, "issue_count": "N/A", "issue_percent": 0, "coverage_count": 0}
+        
+        total_items = len(df)
+        
+        # Total issues flagged by the agent
+        issue_count = int(df['ImageIssues?'].str.contains('❌').sum())
+        
+        # Coverage is defined as items with a URL that is not a blank, null, or a placeholder/default
+        # and has not been flagged with an error.
+        coverage_count = int(df['ImageIssues?'].str.contains('✅ OK').sum())
+
+        if total_items > 0:
+            issue_percent = (issue_count / total_items) * 100
+        else:
+            issue_percent = 0
+            
+        summary = {
+            "name": self.attribute_name,
+            "issue_count": issue_count,
+            "issue_percent": issue_percent,
+            "coverage_count": coverage_count,
+        }
+        
+        logging.info(f"Image Agent Summary: {json.dumps(summary, indent=2)}")
+        
+        return summary
