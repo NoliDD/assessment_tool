@@ -125,7 +125,7 @@ def load_css():
 default_session_state = {
     "api_key": "", "api_key_validated": False, "ai_model": "gpt-4o",
     "website_url": "", "uploaded_file_content": None, "uploaded_file_name": "",
-    "taxonomy_df": None, "criteria_content": None, "vertical": "CnG",
+    "taxonomy_df": None, "criteria_content": None, "vertical": "Grocery",
     "is_nexla": False, "style_guide": "", "last_vertical": "",
     "assessed_df": None, "summary_df": None, "full_report": None,
     "website_comparison_report": None, "final_summary": None,
@@ -230,16 +230,22 @@ def run_assessment_pipeline(agents, df, session, progress_bar, progress_text):
     step += 1
     progress_text.info(f"Step {step}/{total_steps}: Generating final summaries...")
     progress_bar.progress(step / total_steps)
+    
+    # Updated logic to use the detailed summary output
     summary_data = [agent.get_summary(df) for agent in assessment_agents]
     summary_df = pd.DataFrame(summary_data)
-    summary_df['issue_count'] = pd.to_numeric(summary_df['issue_count'], errors='coerce').fillna(0).astype(int)
-    summary_df['Issue Rate'] = summary_df['issue_count'].apply(
-        lambda x: f"{(x / len(df) * 100):.2f}%" if len(df) > 0 else "0.00%")
+    total_skus = len(df)
+    summary_df['Issue Rate'] = summary_df.apply(
+        lambda row: f"{(row['issue_count'] / total_skus * 100):.2f}%" if total_skus > 0 else "0.00%", axis=1)
+    
+    # Clean up column names for display
     summary_df.rename(columns={'name': 'Attribute', 'issue_count': 'Issues Found'}, inplace=True)
     st.session_state.summary_df = summary_df[['Attribute', 'Issues Found', 'Issue Rate']]
+    
     if final_summary_agent and session.api_key_validated:
         st.session_state.final_summary = final_summary_agent.assess(
-            st.session_state.summary_df, st.session_state.full_report, api_key=session.api_key)
+            summary_df, st.session_state.full_report, api_key=session.api_key)
+            
     st.session_state.assessed_csv = df.to_csv(index=False).encode('utf-8')
     st.session_state.sample_30_csv = generate_sample_csv(df, ["UPC", "IMAGE_URL", "CONSUMER_FACING_ITEM_NAME", "SIZE", "UNIT_OF_MEASUREMENT"], 30)
     st.session_state.sample_50_csv = generate_sample_csv(df, ["MSID", "IMAGE_URL"], 50)
@@ -283,14 +289,19 @@ load_css()
 # --- Sidebar UI ---
 with st.sidebar:
     st.header("⚙️ Configuration")
-    st.session_state.api_key = st.text_input("OpenAI API Key", value=st.session_state.api_key, type="password")
-    if st.session_state.api_key:
+    # This is the updated, more secure API key input
+    # It uses st.password to hide the key and stores it in session_state
+    api_key_input = st.text_input("OpenAI API Key", value=st.session_state.get("api_key", ""), type="password")
+    if api_key_input:
+        st.session_state.api_key = api_key_input
         is_valid, message = validate_api_key(st.session_state.api_key)
         st.session_state.api_key_validated = is_valid
         if is_valid: st.success(message)
         else: st.error(message)
     else:
+        st.session_state.api_key = ""
         st.session_state.api_key_validated = False
+        
     st.session_state.ai_model = st.selectbox("Select AI Model for Chat",
         ["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"],
         index=["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"].index(st.session_state.ai_model))
