@@ -35,9 +35,11 @@ class Agent(BaseAgent):
         
         # --- 2. Check for Duplicates ---
         # Find duplicates on the non-blank subset to avoid flagging every blank row as a dupe.
-        non_blank_df = df[~blank_mask]
-        dup_mask = non_blank_df.index.isin(non_blank_df[non_blank_df.duplicated(subset=[check_column], keep='first')].index)
-        
+        # This fix correctly handles the boolean mask indexing
+        non_blank_mask = ~blank_mask
+        duplicate_msid_values = df.loc[non_blank_mask, check_column][df.loc[non_blank_mask, check_column].duplicated(keep='first')].unique()
+
+        dup_mask = df[check_column].isin(duplicate_msid_values)
         df.loc[dup_mask, self.issue_column] += '❌ Duplicate MSID. '
         
         return df
