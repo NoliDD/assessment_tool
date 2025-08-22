@@ -84,12 +84,11 @@ class Agent(BaseAgent):
         
         total_items = len(df)
         
+        # Coverage is defined as items that have a URL that is not blank or null.
+        coverage_count = int(df['IMAGE_URL'].notna().sum())
+        
         # Total issues flagged by the agent
         issue_count = int(df['ImageIssues?'].str.contains('❌').sum())
-        
-        # Coverage is defined as items with a URL that is not a blank, null, or a placeholder/default
-        # and has not been flagged with an error.
-        coverage_count = int(df['ImageIssues?'].str.contains('✅ OK').sum())
 
         if total_items > 0:
             issue_percent = (issue_count / total_items) * 100
