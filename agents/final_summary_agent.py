@@ -167,10 +167,10 @@ def collect_attribute_coverage(summary_df: Optional[pd.DataFrame]) -> Dict[str, 
             
     return out
 
-def evaluate_against_rules(attr_metrics: Dict[str, Tuple[int, int, int]], rules: pd.DataFrame, total_skus: int) -> Dict[str, Any]:
+def evaluate_against_rules(attr_metrics: Dict[str, Tuple[int, int, int]], rules: pd.DataFrame, total_skus: int, summary_df: pd.DataFrame) -> Dict[str, Any]:
     """
     Compare provided attribute metrics against the vertical rules.
-    Returns a dict with pass/fail lists and counts.
+    Returns a dict with pass/fail lists and counts, now including qualitative issues.
     """
     required_fails: List[Dict[str, Any]] = []
     required_passes: List[Dict[str, Any]] = []
@@ -183,7 +183,8 @@ def evaluate_against_rules(attr_metrics: Dict[str, Tuple[int, int, int]], rules:
         cov_text = r.get("coverage_rule_text", None)
         
         # Get metrics for this attribute
-        issue_count, coverage_count, duplicate_count = attr_metrics.get(_normalize(attr).lower(), (0, None, None))
+        metrics = attr_metrics.get(_normalize(attr).lower(), (0, None, None))
+        issue_count, coverage_count, duplicate_count = metrics
         
         record = {
             "attribute": attr, 
@@ -204,24 +205,36 @@ def evaluate_against_rules(attr_metrics: Dict[str, Tuple[int, int, int]], rules:
             coverage_threshold = _parse_coverage(cov_text)
             
             if req == "Required":
-                if coverage_threshold is not None:
-                    if coverage_rate is None or coverage_rate < coverage_threshold:
-                        record["coverage_rate"] = coverage_rate
-                        record["coverage_threshold"] = coverage_threshold
-                        required_fails.append(record)
-                    else:
-                        required_passes.append(record)
-                elif "Fails if" in str(cov_text):
-                    # For non-numeric rules, check for issues flagged by the agent
+                has_issue = False
+                
+                # Check for numeric coverage failure
+                if coverage_threshold is not None and (coverage_rate is None or coverage_rate < coverage_threshold):
+                    record["coverage_rate"] = coverage_rate
+                    record["coverage_threshold"] = coverage_threshold
+                    has_issue = True
+                
+                # Check for non-numeric, qualitative failures ("Fails if...")
+                if "Fails if" in str(cov_text):
+                    # Check if the issue count for this attribute is greater than 0
                     if issue_count > 0:
-                        required_fails.append(record)
-                    else:
-                        required_passes.append(record)
-                else: # Required without a specific rule text
-                    if coverage_count is None or coverage_count == 0:
-                        required_unknown.append(record)
-                    else:
-                        required_passes.append(record)
+                        has_issue = True
+                
+                # Check for missing data in a required attribute without a specific rule
+                if coverage_threshold is None and coverage_count is None:
+                    has_issue = True
+
+                if has_issue:
+                    # Also check if the AI categorized it as "Missing or Unusable"
+                    report_entry = summary_df[summary_df['Attribute'] == attr]
+                    if not report_entry.empty:
+                        assessment_score = report_entry['assessment_score'].iloc[0]
+                        if assessment_score == "Missing or Unusable":
+                            record["assessment_score"] = assessment_score
+                            has_issue = True
+
+                    required_fails.append(record)
+                else:
+                    required_passes.append(record)
             elif req == "Nice to Have":
                 if coverage_threshold is not None and coverage_rate is not None and coverage_rate < coverage_threshold:
                     nice_to_have_issues.append(record)
@@ -264,13 +277,15 @@ class Agent(BaseAgent):
 
         attr_metrics = collect_attribute_coverage(summary_df)
 
-        eval_out = evaluate_against_rules(attr_metrics, applicable_rules, total_skus)
+        # Pass the full report to evaluate_against_rules for qualitative checks
+        eval_out = evaluate_against_rules(attr_metrics, applicable_rules, total_skus, summary_df)
 
         if eval_out["all_required_ok"]:
             eligibility = "Eligible for GP"
         else:
             eligibility = "Not Eligible for GP"
 
+        # The LLM prompt now gets a more comprehensive list of issues
         llm_context = {
             "vertical": vertical,
             "eligibility_by_rules": eligibility,
