@@ -125,7 +125,7 @@ def load_css():
 default_session_state = {
     "api_key": "", "api_key_validated": False, "ai_model": "gpt-4o",
     "website_url": "", "uploaded_file_content": None, "uploaded_file_name": "",
-    "taxonomy_df": None, "criteria_content": None, "vertical": "Grocery",
+    "taxonomy_df": None, "criteria_content": None, "vertical": "CnG",
     "is_nexla": False, "style_guide": "", "last_vertical": "",
     "assessed_df": None, "summary_df": None, "full_report": None,
     "website_comparison_report": None, "final_summary": None,
