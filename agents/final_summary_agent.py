@@ -167,10 +167,12 @@ def collect_attribute_coverage(summary_df: Optional[pd.DataFrame]) -> Dict[str, 
             
     return out
 
-def evaluate_against_rules(attr_metrics: Dict[str, Tuple[int, int, int]], rules: pd.DataFrame, total_skus: int, summary_df: pd.DataFrame) -> Dict[str, Any]:
+def evaluate_against_rules(attr_metrics: Dict[str, Tuple[int, int, int]], rules: pd.DataFrame, total_skus: int, full_report: dict) -> Dict[str, Any]:
     """
     Compare provided attribute metrics against the vertical rules.
     Returns a dict with pass/fail lists and counts, now including qualitative issues.
+    
+    The 'full_report' is used to check for the AI's 'assessment_score'.
     """
     required_fails: List[Dict[str, Any]] = []
     required_passes: List[Dict[str, Any]] = []
@@ -222,16 +224,15 @@ def evaluate_against_rules(attr_metrics: Dict[str, Tuple[int, int, int]], rules:
                 # Check for missing data in a required attribute without a specific rule
                 if coverage_threshold is None and coverage_count is None:
                     has_issue = True
+                
+                # Check for AI's "Missing or Unusable" score from the full_report
+                report_key = next((k for k in full_report.keys() if _normalize(k) == _normalize(attr)), None)
+                if report_key and full_report[report_key].get('assessment', 'N/A') == "Missing or Unusable":
+                    record["assessment_score"] = full_report[report_key].get('assessment', 'N/A')
+                    has_issue = True
+
 
                 if has_issue:
-                    # Also check if the AI categorized it as "Missing or Unusable"
-                    report_entry = summary_df[summary_df['Attribute'] == attr]
-                    if not report_entry.empty:
-                        assessment_score = report_entry['assessment_score'].iloc[0]
-                        if assessment_score == "Missing or Unusable":
-                            record["assessment_score"] = assessment_score
-                            has_issue = True
-
                     required_fails.append(record)
                 else:
                     required_passes.append(record)
@@ -278,7 +279,7 @@ class Agent(BaseAgent):
         attr_metrics = collect_attribute_coverage(summary_df)
 
         # Pass the full report to evaluate_against_rules for qualitative checks
-        eval_out = evaluate_against_rules(attr_metrics, applicable_rules, total_skus, summary_df)
+        eval_out = evaluate_against_rules(attr_metrics, applicable_rules, total_skus, full_report)
 
         if eval_out["all_required_ok"]:
             eligibility = "Eligible for GP"

@@ -13,7 +13,7 @@ class Agent(BaseAgent):
         # The primary issue column will now be for the rule-based checks.
         super().__init__("Item Name Rules", issue_column_name="Item Name Rule Issues")
         # These attributes will be set dynamically from the Streamlit UI
-        self.vertical = "Grocery"
+        self.vertical = "CnG"
         self.is_nexla_mx = False
         self.model = "gpt-5-chat-latest" 
         self.style_guide = ""
