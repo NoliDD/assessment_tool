@@ -172,6 +172,17 @@ Here is the data:
         # This count now represents the total number of flagged age-restricted items
         total_age_restricted_items = manual_flags + ai_flags
 
+        # Find unique L1 categories of flagged items
+        excluded_categories = []
+        if 'L1_CATEGORY' in df.columns:
+            restricted_category_keywords = ["magazine", "subscription", "gift card", "lottery", "fireworks", "weapon", "tobacco", "vape", "nicotine", "kratom", "cbd", "thc", "pseudoephedrine", "dextromethorphan", "weight loss", "muscle building"]
+            
+            # Create a mask for rows where L1_CATEGORY contains any of the keywords
+            l1_mask = df['L1_CATEGORY'].astype(str).str.lower().str.contains('|'.join(restricted_category_keywords), na=False)
+            
+            # Get the unique L1 categories from these rows
+            excluded_categories = df.loc[l1_mask, 'L1_CATEGORY'].dropna().unique().tolist()
+        
         if total_items > 0:
             issue_percent = (total_age_restricted_items / total_items) * 100
         else:
@@ -183,7 +194,8 @@ Here is the data:
             "issue_percent": issue_percent,
             "marked_by_merchant_columns": marked_age_restricted_count,
             "manual_flags": manual_flags,
-            "ai_flags": ai_flags
+            "ai_flags": ai_flags,
+            "excluded_categories_list": excluded_categories
         }
         
         logging.info(f"Exclusion Agent Summary: {json.dumps(summary, indent=2)}")
