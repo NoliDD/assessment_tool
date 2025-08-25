@@ -202,13 +202,20 @@ class Agent(BaseAgent):
         token_param = "max_completion_tokens" if self.model.startswith('gpt-5') else "max_tokens"
         token_value = 4000
         
+        # Determine the correct temperature parameter based on the model
+        temperature_param = {}
+        if self.model.startswith('gpt-5'):
+            temperature_param['temperature'] = 1.0 # Default value for gpt-5 models
+        else:
+            temperature_param['temperature'] = 0.1 # Default value for other models
+            
         try:
             response = client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "system", "content": system_prompt}],
-                temperature=0.1,
                 response_format={"type": "json_object"},
-                **{token_param: token_value}
+                **{token_param: token_value},
+                **temperature_param
             )
         except Exception as e:
             logging.error(f"AI call failed due to parameter error: {e}")
