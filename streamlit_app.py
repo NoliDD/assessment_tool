@@ -239,6 +239,9 @@ def run_assessment_pipeline(agents, df, session, progress_bar, progress_text):
     summary_data = [agent.get_summary(df) for agent in assessment_agents]
     summary_df = pd.DataFrame(summary_data)
     total_skus = len(df)
+    
+    # Bug Fix: Convert 'issue_count' to numeric before performing division
+    summary_df['issue_count'] = pd.to_numeric(summary_df['issue_count'], errors='coerce').fillna(0)
     summary_df['Issue Rate'] = summary_df.apply(
         lambda row: f"{(row['issue_count'] / total_skus * 100):.2f}%" if total_skus > 0 else "0.00%", axis=1)
     
@@ -256,6 +259,7 @@ def run_assessment_pipeline(agents, df, session, progress_bar, progress_text):
     st.session_state.assessment_done = True
     progress_text.success("✅ Assessment complete!")
     st.balloons()
+
 
 def reorder_columns_for_readability(df, is_nexla):
     # This function remains the same as the original script's logic
