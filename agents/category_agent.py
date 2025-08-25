@@ -198,14 +198,22 @@ class Agent(BaseAgent):
             "}\n"
         )
         
-        response = client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "system", "content": system_prompt}],
-            temperature=0.1,
-            max_tokens=4000,
-            response_format={"type": "json_object"} # Force JSON output
-        )
+        # Determine the correct token parameter based on the model
+        token_param = "max_completion_tokens" if self.model.startswith('gpt-5') else "max_tokens"
+        token_value = 4000
         
+        try:
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "system", "content": system_prompt}],
+                temperature=0.1,
+                response_format={"type": "json_object"},
+                **{token_param: token_value}
+            )
+        except Exception as e:
+            logging.error(f"AI call failed due to parameter error: {e}")
+            raise e
+
         content = response.choices[0].message.content
         try:
             # First attempt: direct parsing (most common case)
