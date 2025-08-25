@@ -470,19 +470,20 @@ if st.session_state.assessment_done:
     with tab3:
         st.subheader("⬇️ Download Center")
         st.info("Download the full report or sample files for further analysis.")
-        d_col1, d_col2, d_col3 = st.columns(3)
+        d_col1, d_col2, d_col3, d_col4 = st.columns(4)
         with d_col1:
-            st.download_button("⬇️ Full Detailed Report (.csv)", st.session_state.assessed_csv, "assessment_results.csv", "text/csv", use_container_width=True)
+            st.download_button("⬇️ Full Detailed Report (.csv)", st.session_state.assessed_csv, "assessment_results.csv", "text/csv", use_container_width=True, type='primary')
         with d_col2:
-            st.download_button("⬇️ Name Check Sample (30 SKUs)", st.session_state.sample_30_csv, "sample_30_skus.csv", "text/csv", use_container_width=True)
+            st.download_button("⬇️ Name Check Sample (30 SKUs)", st.session_state.sample_30_csv, "sample_30_skus.csv", "text/csv", use_container_width=True, type='primary')
         with d_col3:
-            st.download_button("⬇️ Image Check Sample (50 SKUs)", st.session_state.sample_50_csv, "sample_50_skus.csv", "text/csv", use_container_width=True)
+            st.download_button("⬇️ Image Check Sample (50 SKUs)", st.session_state.sample_50_csv, "sample_50_skus.csv", "text/csv", use_container_width=True, type='primary')
         
-        st.divider()
+        # st.divider()
 
         # --- ADDED: New download button for the taxonomy mapping ---
         if st.session_state.get("taxonomy_mapping_csv"):
-            st.download_button(
+            with d_col4:
+                st.download_button(
                 label="⬇️ Download Taxonomy Mapping Assessment (.csv)",
                 data=st.session_state.taxonomy_mapping_csv,
                 file_name="Taxonomy_Mapping_Assessment.csv",
