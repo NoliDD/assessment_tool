@@ -29,13 +29,14 @@ class Agent(BaseAgent):
             df.loc[alcohol_mask, self.issue_column] += "⚠️ Excluded: Marked as an Alcohol item. "
 
         # Manual exclusion based on restricted keywords in categories
-        restricted_keywords = ["magazine", "subscription", "gift card", "lottery", "fireworks", "weapon", "medicine", "vape"]
+        restricted_keywords = ["magazine", "subscription", "gift card", "lottery", "fireworks", "weapon", "tobacco", "vape", "nicotine", "kratom", "cbd", "thc", "pseudoephedrine", "dextromethorphan", "weight loss", "muscle building"]
         def check_restricted_category(row):
             l1 = str(row.get("L1_CATEGORY", "")).lower()
             l2 = str(row.get("L2_CATEGORY", "")).lower()
+            item_name = str(row.get("CONSUMER_FACING_ITEM_NAME", "")).lower()
             for keyword in restricted_keywords:
-                if keyword in l1 or keyword in l2:
-                    return f"⚠️ Excluded: Restricted category match for '{keyword}'. "
+                if keyword in l1 or keyword in l2 or keyword in item_name:
+                    return f"⚠️ Excluded: Restricted keyword match for '{keyword}'. "
             return ''
         df[self.issue_column] += df.apply(check_restricted_category, axis=1)
 
@@ -147,3 +148,44 @@ Here is the data:
         except Exception as e:
             logging.warning(f"Failed to load restricted_items.yaml: {e}")
             return []
+
+    def get_summary(self, df: pd.DataFrame) -> dict:
+        """
+        Generates a summary dictionary with detailed metrics for the Exclusion attribute.
+        """
+        if 'ExclusionIssues?' not in df.columns:
+            logging.warning("Exclusion summary failed: Missing required column 'ExclusionIssues?'.")
+            return {"name": self.attribute_name, "issue_count": "N/A", "issue_percent": 0, "manual_flags": 0, "ai_flags": 0}
+
+        total_items = len(df)
+        
+        # New metrics
+        marked_age_restricted_count = 0
+        if 'IS_ALCOHOL' in df.columns:
+            marked_age_restricted_count += int(df['IS_ALCOHOL'].sum())
+        if 'IS_CBD' in df.columns:
+            marked_age_restricted_count += int(df['IS_CBD'].sum())
+
+        manual_flags = int(df['ExclusionIssues?'].str.contains('⚠️').sum())
+        ai_flags = int(df['ExclusionIssues?'].str.contains('🤖').sum())
+        
+        # This count now represents the total number of flagged age-restricted items
+        total_age_restricted_items = manual_flags + ai_flags
+
+        if total_items > 0:
+            issue_percent = (total_age_restricted_items / total_items) * 100
+        else:
+            issue_percent = 0
+        
+        summary = {
+            "name": self.attribute_name,
+            "total_age_restricted_items": total_age_restricted_items,
+            "issue_percent": issue_percent,
+            "marked_by_merchant_columns": marked_age_restricted_count,
+            "manual_flags": manual_flags,
+            "ai_flags": ai_flags
+        }
+        
+        logging.info(f"Exclusion Agent Summary: {json.dumps(summary, indent=2)}")
+        
+        return summary
