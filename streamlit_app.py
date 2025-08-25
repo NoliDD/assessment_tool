@@ -293,6 +293,7 @@ load_css()
 # --- Sidebar UI ---
 with st.sidebar:
     st.header("⚙️ Configuration")
+    # st.subheader("AI Model Configuration")
     # This is the updated, more secure API key input
     # It uses st.password to hide the key and stores it in session_state
     api_key_input = st.text_input("OpenAI API Key", value=st.session_state.get("api_key", ""), type="password")
@@ -305,10 +306,16 @@ with st.sidebar:
     else:
         st.session_state.api_key = ""
         st.session_state.api_key_validated = False
-        
-    st.session_state.ai_model = st.selectbox("Select AI Model for Chat",
+    
+    st.session_state.agent_model = st.selectbox("Select AI Model for Agents",
         ["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"],
-        index=["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"].index(st.session_state.ai_model))
+        index=["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"].index(st.session_state.agent_model))
+        
+    # st.session_state.ai_model = st.selectbox("Select AI Model for Chat",
+    #     ["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"],
+    #     index=["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"].index(st.session_state.ai_model))
+    
+
     st.session_state.website_url = st.text_input("Merchant Website URL", value=st.session_state.website_url)
     uploaded_file = st.file_uploader("1. Upload Merchant Data File", type=["csv", "xlsx"])
     # The taxonomy file is now loaded locally, so no uploader is needed.
@@ -347,11 +354,6 @@ with st.sidebar:
                                              index=verticals.index(st.session_state.vertical))
     st.session_state.is_nexla = st.toggle("Nexla Enabled Merchant?", value=st.session_state.is_nexla)
     
-    st.divider()
-    st.subheader("AI Model Configuration")
-    st.session_state.agent_model = st.selectbox("Select AI Model for Agents",
-        ["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"],
-        index=["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"].index(st.session_state.agent_model))
     
     default_guides = {
         "CnG": "[Brand] [Dietary Tag] [Variation] [Item Name] [Container] [Size & UOM]",

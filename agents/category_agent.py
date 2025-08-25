@@ -37,6 +37,7 @@ class Agent(BaseAgent):
         if api_key and self.taxonomy_df is not None:
             logging.info("Running detailed taxonomy mapping assessment...")
             try:
+                # Bug Fix: Pass api_key to the helper method
                 mapping_df = self.run_detailed_taxonomy_mapping(df, api_key)
                 # Save the result to session state for download
                 st.session_state.taxonomy_mapping_csv = mapping_df.to_csv(index=False).encode('utf-8')
@@ -109,7 +110,7 @@ class Agent(BaseAgent):
             sample_rows = batch_df.to_dict('records')
             logging.info(f"Processing batch {i+1}/{len(batches)} for taxonomy mapping...")
             
-            assessment_result = self.run_ai_assessment_for_mapping(client, sample_rows, vertical_taxonomy_rows, l1_col, l2_col)
+            assessment_result = self.run_ai_assessment_for_mapping(client, sample_rows, vertical_taxonomy_rows, l1_col, l2_col, api_key)
             final_assessment.extend(assessment_result)
 
         return pd.DataFrame(final_assessment)
@@ -165,7 +166,7 @@ class Agent(BaseAgent):
         return self.taxonomy_df[self.taxonomy_df[l1_col_original].notna()], l1_col_original, l2_col_original
 
 
-    def run_ai_assessment_for_mapping(self, client, sample_rows, vertical_taxonomy_rows, l1_col, l2_col):
+    def run_ai_assessment_for_mapping(self, client, sample_rows, vertical_taxonomy_rows, l1_col, l2_col, api_key):
         """Constructs the prompt and calls the AI for taxonomy mapping."""
         allowed_pairs_json = json.dumps(
             [{'L1_L2': row[l1_col] + ' > ' + row[l2_col]} for _, row in vertical_taxonomy_rows.drop_duplicates([l1_col, l2_col]).iterrows()],
@@ -198,45 +199,38 @@ class Agent(BaseAgent):
             "}\n"
         )
         
-        # Determine the correct token parameter based on the model
-        token_param = "max_completion_tokens" if self.model.startswith('gpt-5') else "max_tokens"
-        token_value = 4000
+        # New logic to handle both old and new API parameters
+        params = {
+            "model": self.model,
+            "messages": [{"role": "system", "content": system_prompt}],
+            "response_format": {"type": "json_object"},
+        }
         
-        # Determine the correct temperature parameter based on the model
-        temperature_param = {}
         if self.model.startswith('gpt-5'):
-            temperature_param['temperature'] = 1.0 # Default value for gpt-5 models
+            params['temperature'] = 1.0
+            params['max_completion_tokens'] = 4000
         else:
-            temperature_param['temperature'] = 0.1 # Default value for other models
+            params['temperature'] = 0.1
+            params['max_tokens'] = 4000
             
         try:
-            response = client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "system", "content": system_prompt}],
-                response_format={"type": "json_object"},
-                **{token_param: token_value},
-                **temperature_param
-            )
+            response = client.chat.completions.create(**params)
         except Exception as e:
             logging.error(f"AI call failed due to parameter error: {e}")
             raise e
 
         content = response.choices[0].message.content
-        if not content: # New check for empty response
+        if not content:
             logging.warning("AI returned an empty response. Cannot perform taxonomy assessment.")
             return []
 
         try:
-            # First attempt: direct parsing (most common case)
             return json.loads(content)["assessment"]
         except (json.JSONDecodeError, KeyError):
-            # Fallback: use regex to find JSON within the response text
             logging.warning("Direct JSON parsing failed. Attempting regex fallback.")
             try:
-                # Use a more resilient regex to find the JSON object.
                 json_match = re.search(r'\{.*\}', content, re.DOTALL)
                 if json_match:
-                    # Log the regex-found JSON for debugging
                     logging.info("Regex found a JSON-like object. Attempting to parse.")
                     return json.loads(json_match.group())["assessment"]
                 else:

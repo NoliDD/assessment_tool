@@ -54,7 +54,7 @@ class Agent(BaseAgent):
             if attr['name'] not in ['Brand', 'Image']:
                 subset_col = 'Taxonomy Path' if attr['name'] == 'Category' and 'Taxonomy Path' in df.columns else data_col
                 if subset_col in df.columns:
-                    duplicate_count = df[df.duplicated(subset=[subset_col], keep=False)].shape[0]
+                    duplicate_count = df[df.duplicated(subset=[subset_col], keep='first')].shape[0]
 
             unique_category_count = df['Taxonomy Path'].nunique() if attr['name'] == 'Category' and 'Taxonomy Path' in df.columns else "N/A"
 

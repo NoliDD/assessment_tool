@@ -86,6 +86,8 @@ class Agent(BaseAgent):
 
         # Sample from the entire DataFrame to ensure the AI always runs
         sample_size = min(500, len(df))
+        # The bug was in this line, it was sampling from an unflagged DataFrame that was likely empty.
+        # Now it samples from the original DataFrame to ensure it always runs.
         sample_df = df.sample(n=sample_size)
 
         def get_ai_suggestions(batch_df):
@@ -106,7 +108,7 @@ class Agent(BaseAgent):
             cols_to_send = [col for col in required_ai_cols if col in sample_df.columns]
             
             futures = [executor.submit(get_ai_suggestions, sample_df.iloc[i:i+batch_size][cols_to_send]) for i in range(0, len(sample_df), batch_size)]
-            for future in tqdm(futures, total=len(futures), desc="AI Item Name Check"):
+            for future in as_completed(futures):
                 res = future.result()
                 if res and isinstance(res, dict):
                     if "error" in res:

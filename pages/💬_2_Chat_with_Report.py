@@ -61,6 +61,10 @@ def parse_criteria_yaml(yaml_content):
     except Exception as e:
         st.error(f"Failed to parse the criteria document. Error: {e}")
         return {}
+with st.sidebar:
+    st.session_state.ai_model = st.selectbox("Select AI Model for Chat",
+            ["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"],
+            index=["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"].index(st.session_state.ai_model))
 
 # --- Main Page UI ---
 st.title("💬 Chat with Your Assessment Report")
