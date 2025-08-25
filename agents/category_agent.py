@@ -72,8 +72,84 @@ class Agent(BaseAgent):
 
         unique_paths = df[df['Taxonomy Path'] != '']['Taxonomy Path'].dropna().unique()
         sample_paths = random.sample(list(unique_paths), min(10, len(unique_paths)))
-        # ... (rest of the initial AI assessment logic can go here if desired) ...
+
+        # --- AI-powered check for broad/generic categories on a small sample ---
+        # logging.info("Running initial AI check for broad categories on a sample.")
+        # if len(sample_paths) > 0:
+        #     # Bug Fix: Escape curly braces to avoid KeyError
+        #     prompt_template = """
+        #     You are a data quality analyst. Review the following merchant category paths and identify any that are too broad or generic.
+        #     A category is too broad if it contains many different types of items (e.g., 'Beer' containing both 'IPAs' and 'Stouts'). A category is generic if it lacks specific product detail (e.g., 'Misc.', 'Best Sellers').
+
+        #     For each category, respond with a single JSON object.
+            
+        #     Input Categories:
+        #     {categories}
+
+        #     Response Schema:
+        #     {{
+        #       "assessment": [
+        #         {{
+        #           "category_path": "...",
+        #           "is_too_broad": boolean,
+        #           "is_generic": boolean
+        #         }}
+        #       ]
+        #     }}
+        #     """
+            
+        #     prompt = prompt_template.format(categories=json.dumps(list(sample_paths), indent=2))
+            
+        #     try:
+        #         ai_response_dict = self.call_ai(prompt, api_key, self.model)
+        #         if 'error' not in ai_response_dict:
+        #             ai_results = ai_response_dict.get('assessment', [])
+        #             for result in ai_results:
+        #                 if result.get('is_too_broad') or result.get('is_generic'):
+        #                     path = result['category_path']
+        #                     # Add the issue to all rows that have this path
+        #                     df.loc[df['Taxonomy Path'] == path, self.issue_column] += '❌ AI flagged as too broad or generic. '
+        #     except Exception as e:
+        #         logging.error(f"Error during initial AI category check: {e}")
+
         return df
+
+    def get_summary(self, df: pd.DataFrame) -> dict:
+        """
+        Generates a summary dictionary with detailed metrics for the Category attribute.
+        """
+        if 'Taxonomy Path' not in df.columns or self.issue_column not in df.columns:
+            logging.warning(f"Category summary failed: Missing required columns 'Taxonomy Path' or '{self.issue_column}'.")
+            return {"name": self.attribute_name, "issue_count": "N/A", "issue_percent": 0, "coverage_count": 0, "unique_category_count": 0}
+            
+        total_items = len(df)
+
+        # Count of non-blank category paths for coverage
+        coverage_count = int(df['Taxonomy Path'].astype(bool).sum())
+        
+        # Count of unique category paths
+        unique_category_count = int(df['Taxonomy Path'].nunique())
+
+        # Calculate total issues flagged by the agent
+        issue_count = int(df[self.issue_column].str.contains('❌').sum())
+        
+        if total_items > 0:
+            issue_percent = (issue_count / total_items) * 100
+        else:
+            issue_percent = 0
+
+        summary = {
+            "name": self.attribute_name,
+            "issue_count": issue_count,
+            "issue_percent": issue_percent,
+            "coverage_count": coverage_count,
+            "unique_category_count": unique_category_count,
+        }
+
+        logging.info(f"Category Agent Summary: {json.dumps(summary, indent=2)}")
+
+        return summary
+
 
     def run_detailed_taxonomy_mapping(self, df: pd.DataFrame, api_key: str) -> pd.DataFrame:
         """
@@ -107,10 +183,21 @@ class Agent(BaseAgent):
 
         for i, batch_categories in enumerate(batches):
             batch_df = sampled_catalog_df[sampled_catalog_df["Category_Path"].isin(batch_categories)]
-            sample_rows = batch_df.to_dict('records')
+            
+            # Bug Fix: Ensure the data sent to the AI includes the item name.
+            # This is the key change to get the AI to output the item name.
+            cols_to_send = [
+                'MSID', 'CONSUMER_FACING_ITEM_NAME', 'IMAGE_URL',
+                'L1_CATEGORY', 'L2_CATEGORY', 'L3_CATEGORY', 'L4_CATEGORY'
+            ]
+            
+            # Filter the batch_df to only include the columns that exist in the DataFrame.
+            existing_cols = [col for col in cols_to_send if col in batch_df.columns]
+            sample_rows = batch_df[existing_cols].to_dict('records')
+            
             logging.info(f"Processing batch {i+1}/{len(batches)} for taxonomy mapping...")
             
-            assessment_result = self.run_ai_assessment_for_mapping(client, sample_rows, vertical_taxonomy_rows, l1_col, l2_col, api_key)
+            assessment_result = self._run_ai_assessment_for_mapping(client, sample_rows, vertical_taxonomy_rows, l1_col, l2_col, api_key)
             final_assessment.extend(assessment_result)
 
         return pd.DataFrame(final_assessment)
@@ -166,7 +253,7 @@ class Agent(BaseAgent):
         return self.taxonomy_df[self.taxonomy_df[l1_col_original].notna()], l1_col_original, l2_col_original
 
 
-    def run_ai_assessment_for_mapping(self, client, sample_rows, vertical_taxonomy_rows, l1_col, l2_col, api_key):
+    def _run_ai_assessment_for_mapping(self, client, sample_rows, vertical_taxonomy_rows, l1_col, l2_col, api_key):
         """Constructs the prompt and calls the AI for taxonomy mapping."""
         allowed_pairs_json = json.dumps(
             [{'L1_L2': row[l1_col] + ' > ' + row[l2_col]} for _, row in vertical_taxonomy_rows.drop_duplicates([l1_col, l2_col]).iterrows()],
@@ -186,17 +273,7 @@ class Agent(BaseAgent):
             f"{json.dumps(sample_rows, indent=2)}\n\n"
             "You MUST respond with only a single, valid JSON object that adheres to the following schema. Do not include any other text, explanations, or markdown formatting.\n"
             "Response Schema:\n"
-            "{\n"
-            "  \"assessment\": [\n"
-            "    {\n"
-            "      \"Mx_Category\": \"...\",\n"
-            "      \"Issue\": \"Specific but could be matched to a more appropriate category\",\n"
-            "      \"Recommended_Taxonomy\": \"<L1_NAME> > <L2_NAME>\",\n"
-            "      \"Example_SKUs\": [\"...\"],\n"
-            "      \"Considered_Info\": \"Explain how name/image guided your suggestion\"\n"
-            "    }\n"
-            "  ]\n"
-            "}\n"
+            "{{ \"assessment\": [ {{ \"Mx_Category\": \"...\", \"Issue\": \"Specific but could be matched to a more appropriate category\", \"Recommended_Taxonomy\": \"<L1_NAME> > <L2_NAME>\", \"Example_SKUs\": [\"name1\"], \"Considered_Info\": \"Explain how name/image guided your suggestion\" }} ] }}\n"
         )
         
         # New logic to handle both old and new API parameters
