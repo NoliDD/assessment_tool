@@ -16,7 +16,7 @@ class Agent(BaseAgent):
     def __init__(self):
         super().__init__("Category")
         self.taxonomy_df = None
-        self.vertical = "Grocery"
+        self.vertical = "CnG"
         self.model = "gpt-4o"
 
     def assess(self, df: pd.DataFrame, api_key: str = None) -> pd.DataFrame:
@@ -222,6 +222,10 @@ class Agent(BaseAgent):
             raise e
 
         content = response.choices[0].message.content
+        if not content: # New check for empty response
+            logging.warning("AI returned an empty response. Cannot perform taxonomy assessment.")
+            return []
+
         try:
             # First attempt: direct parsing (most common case)
             return json.loads(content)["assessment"]
@@ -229,8 +233,10 @@ class Agent(BaseAgent):
             # Fallback: use regex to find JSON within the response text
             logging.warning("Direct JSON parsing failed. Attempting regex fallback.")
             try:
+                # Use a more resilient regex to find the JSON object.
                 json_match = re.search(r'\{.*\}', content, re.DOTALL)
                 if json_match:
+                    # Log the regex-found JSON for debugging
                     logging.info("Regex found a JSON-like object. Attempting to parse.")
                     return json.loads(json_match.group())["assessment"]
                 else:
