@@ -130,7 +130,8 @@ default_session_state = {
     "assessed_df": None, "summary_df": None, "full_report": None,
     "website_comparison_report": None, "final_summary": None,
     "assessed_csv": None, "sample_30_csv": None, "sample_50_csv": None,
-    "assessment_done": False
+    "assessment_done": False,
+    "agent_model": "gpt-5-chat-latest" # New session state variable for agent model
 }
 for key, val in default_session_state.items():
     if key not in st.session_state:
@@ -181,11 +182,14 @@ def load_dataframe(file_content, file_name):
 def configure_agent(agent, session):
     mapping = {
         'taxonomy_df': 'taxonomy_df', 'vertical': 'vertical',
-        'is_nexla_mx': 'is_nexla', 'style_guide': 'style_guide', 'model': 'ai_model'
+        'is_nexla_mx': 'is_nexla', 'style_guide': 'style_guide',
     }
     for agent_attr, session_key in mapping.items():
         if hasattr(agent, agent_attr):
             setattr(agent, agent_attr, session.get(session_key))
+    # New logic to set a dedicated model for AI agents
+    if hasattr(agent, 'model'):
+        setattr(agent, 'model', session.get('agent_model'))
 
 def run_assessment_pipeline(agents, df, session, progress_bar, progress_text):
     # This function remains the same as the original script's logic
@@ -342,6 +346,13 @@ with st.sidebar:
     st.session_state.vertical = st.selectbox("Select Business Vertical", options=verticals,
                                              index=verticals.index(st.session_state.vertical))
     st.session_state.is_nexla = st.toggle("Nexla Enabled Merchant?", value=st.session_state.is_nexla)
+    
+    st.divider()
+    st.subheader("AI Model Configuration")
+    st.session_state.agent_model = st.selectbox("Select AI Model for Agents",
+        ["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"],
+        index=["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"].index(st.session_state.agent_model))
+    
     default_guides = {
         "CnG": "[Brand] [Dietary Tag] [Variation] [Item Name] [Container] [Size & UOM]",
         "Alcohol": "[Brand] [Dietary Tag] [Flavor] [Variation] [Size] [Color] [Age] [Item Name] [Container] [Appellation Location] [Vintage Year] [Size & UOM]",

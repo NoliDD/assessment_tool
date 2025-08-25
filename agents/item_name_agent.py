@@ -2,7 +2,7 @@ from .base_agent import BaseAgent
 import pandas as pd
 import os
 from openai import OpenAI
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import random
 from tqdm import tqdm
 import re
@@ -38,6 +38,7 @@ class Agent(BaseAgent):
         
         # Pre-process: Strip whitespace to handle dirty data
         df[item_name_col] = df[item_name_col].astype(str).str.strip()
+        df['MSID'] = df['MSID'].astype(str)
 
         # --- 1. Rule-Based Checks ---
         blank_mask = df[item_name_col].isnull() | (df[item_name_col].str.lower().isin(['default', 'default_name', 'nan', '']))
@@ -53,28 +54,12 @@ class Agent(BaseAgent):
         formatting_mask = df[item_name_col].str.endswith(',', na=False)
         df.loc[formatting_mask, self.issue_column] += '❌ Formatting issue: Item name ends with a comma. '
 
-        # Check for inconsistent capitalization
-        def check_capitalization(name):
-            if not isinstance(name, str) or not name:
-                return ''
-            # Check if it is fully lowercase, fully uppercase, or not title case
-            is_title_case = name.istitle()
-            is_all_caps = name.isupper()
-            is_all_lower = name.islower()
-            if not is_title_case and not is_all_caps and not is_all_lower:
-                return '❌ Inconsistent capitalization. '
-            return ''
-
-        cap_mask = df[item_name_col].apply(check_capitalization)
-        df.loc[cap_mask != '', self.issue_column] += cap_mask
-        
         # --- 2. AI-Powered Checks ---
         if not api_key:
             logging.info("OpenAI API key not provided. Skipping AI analysis for Item Names.")
             df[ai_issue_col] = "ℹ️ AI Check Skipped (No API Key)."
             return df
         
-        # Instructions are now derived from the is_nexla toggle
         scenario_instructions = (
             "This merchant is a 'Nexla' type, meaning Brand, Size, and Variant may be in separate columns. Your main goal is to assess if the provided item names, in combination with other (unseen) columns, have enough information to be programmatically concatenated into our ideal style guide format."
             if self.is_nexla_mx
@@ -92,30 +77,27 @@ class Agent(BaseAgent):
             - "is_complete": boolean. Does the name seem to be missing critical attributes (e.g., flavor, color)?
             - "can_be_mapped": boolean. Does the name contain enough information to be programmatically transformed into our style guide?
             - "suggestion": string. Provide the corrected item name according to our ideal style guide.
+            - "reason": string. Provide a brief explanation for your findings.
         Return a single JSON object where keys are the item MSIDs.
 
         Here are the items to check:
         {{batch_json}}
         """
 
-        unflagged_df = df[df[self.issue_column] == '']
-        if unflagged_df.empty:
-            return df
+        # Sample from the entire DataFrame to ensure the AI always runs
+        sample_size = min(500, len(df))
+        sample_df = df.sample(n=sample_size)
 
-        sample_size = min(500, len(unflagged_df))
-        sample_df = unflagged_df.sample(n=sample_size)
-
-        def get_ai_suggestions(batch):
+        def get_ai_suggestions(batch_df):
             try:
-                batch_prompt = prompt_template.format(batch_json=batch.to_json(orient='records'))
+                batch_prompt = prompt_template.format(batch_json=batch_df.to_json(orient='records'))
                 ai_response = self.call_ai(batch_prompt, api_key, self.model)
                 if 'error' in ai_response:
-                    logging.error(f"AI call failed: {ai_response['error']}")
-                    return {}
+                    return {"error": ai_response['error'], "msids": batch_df['MSID'].tolist()}
                 return ai_response
             except Exception as e:
                 logging.error(f"Error in AI batch processing: {e}", exc_info=True)
-                return {}
+                return {"error": str(e), "msids": batch_df['MSID'].tolist()}
 
         batch_size = 10
         results = {}
@@ -127,15 +109,25 @@ class Agent(BaseAgent):
             for future in tqdm(futures, total=len(futures), desc="AI Item Name Check"):
                 res = future.result()
                 if res and isinstance(res, dict):
-                    results.update(res)
+                    if "error" in res:
+                        # Handle the error and flag all items in the batch
+                        for msid in res["msids"]:
+                            idx = df[df['MSID'].astype(str) == str(msid)].index
+                            if not idx.empty:
+                                df.loc[idx, ai_issue_col] = f"❌ AI Check Failed: {res['error']}"
+                    else:
+                        results.update(res)
 
         for msid_str, analysis in results.items():
             try:
                 msid = msid_str
                 issue_msg = ""
-                if analysis.get('is_consistent') == False: issue_msg += "Inconsistent w/ Mx pattern. "
-                if analysis.get('is_complete') == False: issue_msg += "Missing attributes. "
-                if analysis.get('can_be_mapped') == False: issue_msg += "Cannot be mapped. "
+                # Add a comprehensive check for any of the AI's boolean flags
+                if not analysis.get('is_consistent') or not analysis.get('is_complete') or not analysis.get('can_be_mapped'):
+                    issue_msg += "AI detected issues. "
+                    # Append the AI's reason for more detail
+                    reason = analysis.get('reason', 'No specific reason provided.')
+                    issue_msg += f"Reason: '{reason}'"
                 
                 if issue_msg:
                     suggestion = analysis.get('suggestion', 'N/A')
