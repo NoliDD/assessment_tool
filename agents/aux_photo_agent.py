@@ -7,6 +7,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import random
 from tqdm import tqdm
 import re
+import ast
+from typing import List
 
 class Agent(BaseAgent):
     def __init__(self):
@@ -31,7 +33,6 @@ class Agent(BaseAgent):
             try:
                 # Use literal_eval to safely parse the string as a Python list
                 if isinstance(url_string, str) and url_string.startswith('['):
-                    import ast
                     return ast.literal_eval(url_string)
                 return []
             except (ValueError, SyntaxError):
@@ -40,6 +41,9 @@ class Agent(BaseAgent):
         # Apply the parser to the entire column
         df['parsed_aux_urls'] = df['ADDITIONAL_IMAGE_URLS'].apply(parse_url_list)
         
+        # --- NEW: Create a new column with the formatted URLs ---
+        df['All_Aux_Photos_URLs'] = df['parsed_aux_urls'].apply(lambda x: '\n'.join(x) if x else '')
+
         def check_issues(row):
             issues = []
             main_url = str(row['IMAGE_URL']).strip() if pd.notna(row['IMAGE_URL']) else ''
@@ -69,6 +73,38 @@ class Agent(BaseAgent):
         # Apply the check_issues function to the DataFrame
         df[self.issue_column] = df.apply(check_issues, axis=1)
 
+        # --- 4. Perform Live URL Checks on a Sample ---
+        # Get a flat list of all unique, non-flagged auxiliary URLs for the live check
+        all_aux_urls = df['parsed_aux_urls'].explode().dropna()
+        live_check_urls = all_aux_urls.drop_duplicates().tolist()
+        
+        # Only proceed if we have URLs to check
+        if live_check_urls:
+            sample_size = min(500, len(live_check_urls))
+            sample_urls = random.sample(live_check_urls, sample_size)
+            logging.info(f"Performing live check on a sample of {len(sample_urls)} auxiliary images...")
+
+            def validate_single_url(url):
+                try:
+                    # Use HEAD request for efficiency
+                    response = requests.head(url, timeout=5)
+                    if response.status_code != 200:
+                        return url, f"❌ URL dead (Code: {response.status_code}). "
+                except requests.RequestException:
+                    return url, "❌ URL request failed. "
+                return url, ""
+
+            with ThreadPoolExecutor(max_workers=20) as executor:
+                futures = [executor.submit(validate_single_url, url) for url in sample_urls]
+                for future in tqdm(as_completed(futures), total=len(sample_urls), desc="Live Aux Image Check"):
+                    url, error_msg = future.result()
+                    if error_msg:
+                        # Find all rows that contain this URL and add the error message
+                        for index, row in df.iterrows():
+                            if url in row['parsed_aux_urls']:
+                                if error_msg not in df.loc[index, self.issue_column]:
+                                    df.loc[index, self.issue_column] += error_msg
+
         # Clean up the temporary column
         df.drop(columns=['parsed_aux_urls'], inplace=True, errors='ignore')
 
@@ -88,10 +124,7 @@ class Agent(BaseAgent):
         coverage_count = int(df['ADDITIONAL_IMAGE_URLS'].notna().sum())
         
         # Calculate total issues flagged by the agent
-        # The fix is here: ensures issue_count is a number before division
-        issue_count = df['AuxPhotoIssues?'].str.contains('❌').sum()
-        if not isinstance(issue_count, (int, float)):
-            issue_count = 0
+        issue_count = int((df['AuxPhotoIssues?'].str.strip() != '').sum())
         
         # Count of Aux photos without a main photo
         no_main_photo_count = int(df['AuxPhotoIssues?'].str.contains('❌ Aux Photo provided without a main photo.').sum())
