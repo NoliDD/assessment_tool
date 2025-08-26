@@ -199,7 +199,7 @@ def run_assessment_pipeline(agents, df, session, progress_bar, progress_text):
     concat_agent = next((a for a in agents if a.attribute_name == "Nexla Concatenation"), None)
     assessment_agents = [a for a in agents if a.attribute_name not in
                          ["Master Reporting", "Website Comparison", "Final Summary", "Nexla Concatenation"]]
-    logging.info(f"agents: {assessment_agents}")
+    # logging.info(f"agents: {assessment_agents}")
     total_steps = len(assessment_agents) + 5
     step = 0
     if session.is_nexla and concat_agent:
