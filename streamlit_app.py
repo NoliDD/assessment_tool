@@ -273,7 +273,7 @@ def reorder_columns_for_readability(df, is_nexla):
         ['BRAND_NAME', 'BrandIssues?'], item_group, ['IMAGE_URL', 'ImageIssues?'],
         ['SIZE', 'SizeIssues?'], ['UNIT_OF_MEASUREMENT', 'UNIT_OF_MEASUREMENTIssues?'],
         ['L1_CATEGORY', 'L2_CATEGORY', 'L3_CATEGORY', 'L4_CATEGORY', 'Taxonomy Path', 'CategoryIssues?'],
-        ['IS_WEIGHTED_ITEM', 'WeightedItemIssues?'], ['PLU', 'PLUIssues?'],
+        ['IS_WEIGHTED_ITEM', 'WeightedItemIssues?', 'AVERAGE_WEIGHT_PER_EACH'], ['PLU', 'PLUIssues?'],
         ['IS_ALCOHOL', 'IS_CBD', 'RestrictedItemIssues?', 'ExclusionIssues?'],
         ['SNAP_ELIGIBLE', 'SNAPEligibilityIssues?'],
         ['PRODUCT_GROUP', 'ProductGroupIssues?'],
