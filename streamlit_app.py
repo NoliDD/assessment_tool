@@ -197,9 +197,16 @@ def run_assessment_pipeline(agents, df, session, progress_bar, progress_text):
     website_agent = next((a for a in agents if a.attribute_name == "Website Comparison"), None)
     final_summary_agent = next((a for a in agents if a.attribute_name == "Final Summary"), None)
     concat_agent = next((a for a in agents if a.attribute_name == "Nexla Concatenation"), None)
-    assessment_agents = [a for a in agents if a.attribute_name not in
-                         ["Master Reporting", "Website Comparison", "Final Summary", "Nexla Concatenation"]]
+    # assessment_agents = [a for a in agents if a.attribute_name not in
+    #                      ["Master Reporting", "Website Comparison", "Final Summary", "Nexla Concatenation"]]
     # logging.info(f"agents: {assessment_agents}")
+
+    EXCLUDE = {"Master Reporting", "Website Comparison", "Final Summary", "Nexla Concatenation"}
+
+    # keep original order but put Category first
+    assessment_agents = [a for a in agents if getattr(a, "attribute_name", "").strip() not in EXCLUDE]
+    assessment_agents.sort(key=lambda a: 0 if getattr(a, "attribute_name", "").strip().lower().startswith("category") else 1)
+
     total_steps = len(assessment_agents) + 5
     step = 0
     if session.is_nexla and concat_agent:
