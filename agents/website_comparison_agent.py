@@ -23,7 +23,7 @@ class Agent(BaseAgent):
             return {"assessment": "N/A", "reasoning": "No website URL was provided for comparison."}
 
         # Take a representative sample of the data to show the AI
-        sample_df = df.sample(n=min(10, len(df)))
+        sample_df = df.sample(n=min(20, len(df)))
         
         # Select key columns for the AI to analyze
         cols_to_show = ['BRAND_NAME', 'CONSUMER_FACING_ITEM_NAME', 'IMAGE_URL', 'L1_CATEGORY', 'L2_CATEGORY']
