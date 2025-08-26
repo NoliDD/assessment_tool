@@ -199,6 +199,7 @@ def run_assessment_pipeline(agents, df, session, progress_bar, progress_text):
     concat_agent = next((a for a in agents if a.attribute_name == "Nexla Concatenation"), None)
     assessment_agents = [a for a in agents if a.attribute_name not in
                          ["Master Reporting", "Website Comparison", "Final Summary", "Nexla Concatenation"]]
+    logging.info(f"agents: {assessment_agents}")
     total_steps = len(assessment_agents) + 5
     step = 0
     if session.is_nexla and concat_agent:
@@ -273,7 +274,7 @@ def reorder_columns_for_readability(df, is_nexla):
         ['BRAND_NAME', 'BrandIssues?'], item_group, ['IMAGE_URL', 'ImageIssues?'],
         ['SIZE', 'SizeIssues?'], ['UNIT_OF_MEASUREMENT', 'UNIT_OF_MEASUREMENTIssues?'],
         ['L1_CATEGORY', 'L2_CATEGORY', 'L3_CATEGORY', 'L4_CATEGORY', 'Taxonomy Path', 'CategoryIssues?'],
-        ['IS_WEIGHTED_ITEM', 'WeightedItemIssues?', 'AVERAGE_WEIGHT_PER_EACH'], ['PLU', 'PLUIssues?'],
+        ['IS_WEIGHTED_ITEM', 'WeightedItemIssues?', 'AVERAGE_WEIGHT_PER_EACH', 'AverageWeightIssues?', 'AVERAGE_WEIGHT_UOM'], ['PLU', 'PLUIssues?'],
         ['IS_ALCOHOL', 'IS_CBD', 'RestrictedItemIssues?', 'ExclusionIssues?'],
         ['SNAP_ELIGIBLE', 'SNAPEligibilityIssues?'],
         ['PRODUCT_GROUP', 'ProductGroupIssues?'],
