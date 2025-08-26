@@ -277,8 +277,9 @@ def reorder_columns_for_readability(df, is_nexla):
         ['IS_ALCOHOL', 'IS_CBD', 'RestrictedItemIssues?', 'ExclusionIssues?'],
         ['SNAP_ELIGIBLE', 'SNAPEligibilityIssues?'],
         ['PRODUCT_GROUP', 'ProductGroupIssues?'],
-        ['VARIANT', 'VaraintIssues?'],
-        ['ADDITIONAL_IMAGE_URLS','AuxPhtotIssues?', 'All_Aux_Photos_URLs']
+        ['VARIANT', 'VariantIssues?'],
+        ['ADDITIONAL_IMAGE_URLS','AuxPhotoIssues?', 'All_Aux_Photos_URLs'],
+        ['SHORT_DESCRIPTION', 'DetailsIssues?']
     ]
     reordered, seen = [], set()
     for group in groups:
