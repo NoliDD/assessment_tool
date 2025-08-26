@@ -165,7 +165,7 @@ def load_dataframe(file_content, file_name):
     """Loads a dataframe from file content, caching the result."""
     try:
         # --- FIX: Specify dtype for MSID to preserve leading zeros ---
-        dtype_spec = {'MSID': str, 'UPC': str} # Also good practice for UPC
+        dtype_spec = {'BUSINESS_ID': str, 'MSID': str, 'UPC': str} # Also good practice for UPC
         
         if file_name.lower().endswith('.csv'):
             return pd.read_csv(BytesIO(file_content), low_memory=False, dtype=dtype_spec)
@@ -255,7 +255,18 @@ def run_assessment_pipeline(agents, df, session, progress_bar, progress_text):
     
     # Clean up column names for display
     summary_df.rename(columns={'name': 'Attribute', 'issue_count': 'Issues Found'}, inplace=True)
-    st.session_state.summary_df = summary_df[['Attribute', 'Issues Found', 'Issue Rate']]
+    # st.session_state.summary_df = summary_df[['Attribute', 'Issues Found', 'Issue Rate']]
+
+    # NEW: Create a comprehensive summary_df for display
+    # This includes all the metrics from the get_summary() methods
+    display_cols = ['Attribute', 'Issues Found', 'Issue Rate']
+    
+    # Add new columns if they exist in the summary data
+    for col in ['coverage_count', 'duplicate_count']:
+        if col in summary_df.columns:
+            display_cols.append(col)
+            
+    st.session_state.summary_df = summary_df[display_cols]
     
     if final_summary_agent and session.api_key_validated:
         st.session_state.final_summary = final_summary_agent.assess(
