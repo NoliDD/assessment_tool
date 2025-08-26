@@ -2,8 +2,10 @@ import streamlit as st
 import pandas as pd
 from openai import OpenAI
 import re
-import yaml # Import the yaml library
-from utils import validate_api_key, init_session_state
+import yaml
+from utils import validate_api_key
+import json
+import logging
 
 # --- Page Configuration and State Initialization ---
 st.set_page_config(layout="wide", page_title="Chat with Report", page_icon="🧠")
@@ -34,12 +36,11 @@ def initialize_chat_session():
     # to avoid errors, providing default/empty values if necessary.
     keys_to_check = [
         'assessment_done', 'api_key_validated', 'api_key', 'criteria_content',
-        'assessed_df', 'style_guide', 'vertical', 'ai_model'
+        'assessed_df', 'style_guide', 'vertical', 'ai_model', 'full_report'
     ]
     for key in keys_to_check:
         if key not in st.session_state:
             st.session_state[key] = None if key != 'assessment_done' else False
-
 
 initialize_chat_session()
 
@@ -61,10 +62,7 @@ def parse_criteria_yaml(yaml_content):
     except Exception as e:
         st.error(f"Failed to parse the criteria document. Error: {e}")
         return {}
-with st.sidebar:
-    st.session_state.ai_model = st.selectbox("Select AI Model for Chat",
-            ["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"],
-            index=["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"].index(st.session_state.ai_model))
+
 
 # --- Main Page UI ---
 st.title("💬 Chat with Your Assessment Report")
@@ -92,6 +90,12 @@ else:
 # --- Chat UI ---
 st.success("API key is valid. You can now chat with your report.")
 
+with st.sidebar:
+    st.subheader("Chat Configuration")
+    st.session_state.ai_model = st.selectbox("Select AI Model for Chat",
+        ["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"],
+        index=["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"].index(st.session_state.ai_model))
+
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -108,7 +112,7 @@ if prompt := st.chat_input("Ask about your assessment results or the rules..."):
             # --- Build Context for the AI ---
             # 1. Create a sample of the main data
             if st.session_state.assessed_df is not None and not st.session_state.assessed_df.empty:
-                sample_size = min(100, len(st.session_state.assessed_df))
+                sample_size = min(500, len(st.session_state.assessed_df))
                 context_df_sample = st.session_state.assessed_df.sample(n=sample_size)
 
                 context_cols = [
@@ -156,13 +160,20 @@ if prompt := st.chat_input("Ask about your assessment results or the rules..."):
             style_guide = st.session_state.get("style_guide", "No style guide provided.")
             vertical = st.session_state.get("vertical", "this vertical")
 
-            # 4. Construct the system prompt
+            # 4. Get the full report for detailed analysis
+            full_report_context = "No full report available."
+            if st.session_state.get('full_report'):
+                full_report_context = json.dumps(st.session_state.full_report, indent=2)
+
+            # 5. Construct the full system prompt with all available context
             system_prompt = {
                 "role": "system",
                 "content": f"""
 You are a data analyst assistant. Your task is to answer the user's question based *only* on the provided context.
-If the user asks about a rule or 'why' something is an issue, refer to the 'Relevant Assessment Criteria'.
-If the user asks about data, refer to the 'DATA CONTEXT'.
+Use all available information to provide a detailed and comprehensive response.
+
+--- FULL ASSESSMENT REPORT ---
+{full_report_context}
 
 --- RELEVANT ASSESSMENT CRITERIA ---
 {relevant_criteria}
@@ -176,6 +187,9 @@ If the user asks about data, refer to the 'DATA CONTEXT'.
             }
 
             messages_to_send = [system_prompt] + st.session_state.messages
+            
+            # New log message to confirm the selected model
+            st.info(f"Using AI model: **{st.session_state.get('ai_model', 'gpt-4o')}**")
 
             # --- Call OpenAI API ---
             response = client.chat.completions.create(

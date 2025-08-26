@@ -71,7 +71,9 @@ class Agent(BaseAgent):
         
         INSTRUCTIONS:
         1.  **Scenario Context**: {scenario_instructions}
-        2.  **Ideal Style Guide**: Our target format for the '{self.vertical}' vertical is: {self.style_guide}
+        2.  **Ideal Style Guide**: Our target format for the '{self.vertical}' vertical is: {self.style_guide}.
+            - Format the Size and UoM in parentheses with a space between the numeric value and the unit, for example: `(160 g)` or `(12 oz)`.
+            - For weighted items, the suggested format should be `Item Name (UoM)`, for example, `Banana (ea)` or `tomato (ea))`.
         3.  **Your Task**: For each item below, analyze it and return a JSON object with the following keys:
             - "is_consistent": boolean. Is this item's format consistent with the merchant's overall naming pattern?
             - "is_complete": boolean. Does the name seem to be missing critical attributes (e.g., flavor, color)?
@@ -86,8 +88,6 @@ class Agent(BaseAgent):
 
         # Sample from the entire DataFrame to ensure the AI always runs
         sample_size = min(500, len(df))
-        # The bug was in this line, it was sampling from an unflagged DataFrame that was likely empty.
-        # Now it samples from the original DataFrame to ensure it always runs.
         sample_df = df.sample(n=sample_size)
 
         def get_ai_suggestions(batch_df):
