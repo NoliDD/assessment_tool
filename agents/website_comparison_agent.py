@@ -7,7 +7,7 @@ class Agent(BaseAgent):
     def __init__(self):
         # This agent doesn't modify the DataFrame, so it has a unique name
         super().__init__("Website Comparison")
-        self.model = "gpt-4o"
+        self.model = "gpt-5-chat-latest"
 
     def assess(self, df: pd.DataFrame, api_key: str = None, website_url: str = None) -> dict:
         """

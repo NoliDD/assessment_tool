@@ -4,11 +4,25 @@ from openai import OpenAI
 import re
 import yaml
 from utils import validate_api_key
-import json
+import json, os
 import logging
+from datetime import date
+from ui import add_footer
 
 # --- Page Configuration and State Initialization ---
 st.set_page_config(layout="wide", page_title="Chat with Report", page_icon="🧠")
+# st.set_page_config(
+#     page_title="Data Assessment Tool",   # <- shows in the top navbar
+#     page_icon="✨🚀",
+#     layout="wide",
+#     initial_sidebar_state="expanded",
+#     menu_items={        # optional: customize / hide default menu entries
+#         "Get Help": None,
+#         "Report a bug": None,
+#         "About": "Data Assessment Tool v1.0"
+#     }
+# )
+
 
 # --- Custom CSS (Optional, for consistency) ---
 st.markdown("""
@@ -71,16 +85,20 @@ st.title("💬 Chat with Your Assessment Report")
 if not st.session_state.get('assessment_done'):
     st.warning("Please run an assessment on the main page first.")
     st.page_link("streamlit_app.py", label="Go to Main Page", icon="🏠")
+    add_footer()
     st.stop()
 
 if not st.session_state.get('api_key_validated'):
     st.error("No valid OpenAI API key found. Please return to the main page and enter a valid key.")
     st.page_link("streamlit_app.py", label="Go to Main Page", icon="🏠")
+    add_footer()
     st.stop()
+
 
 # --- Load and Display Criteria Status ---
 # Pass the YAML string from session state to the parsing function
 assessment_criteria_dict = parse_criteria_yaml(st.session_state.get('criteria_content'))
+
 
 if assessment_criteria_dict:
     st.info("✅ Assessment criteria document is loaded and ready for questions.")
@@ -93,8 +111,8 @@ st.success("API key is valid. You can now chat with your report.")
 with st.sidebar:
     st.subheader("Chat Configuration")
     st.session_state.ai_model = st.selectbox("Select AI Model for Chat",
-        ["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"],
-        index=["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"].index(st.session_state.ai_model))
+        ["gpt-5", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o", "gpt-5-chat-latest"],
+        index=["gpt-5", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o", "gpt-5-chat-latest"].index(st.session_state.ai_model))
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -205,3 +223,7 @@ Use all available information to provide a detailed and comprehensive response.
 
         except Exception as e:
             st.error(f"An error occurred while communicating with the AI: {e}")
+
+# call once near the end of each page:
+add_footer()
+

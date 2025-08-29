@@ -9,7 +9,7 @@ class Agent(BaseAgent):
         super().__init__("Master Reporting")
         self.model = "gpt-5-chat-latest"
 
-    def assess(self, df: pd.DataFrame, api_key: str = None) -> dict:
+    def assess(self, df: pd.DataFrame, vertical: str = "Unknown", api_key: str = None) -> dict:
         """
         Analyzes the fully assessed DataFrame to generate a structured report
         for each attribute, incorporating detailed qualitative checks.
@@ -23,19 +23,28 @@ class Agent(BaseAgent):
         total_skus = len(df)
         logging.info(f"Total SKUs calculated: {total_skus}")
 
+        # **FIX**: Use the provided vertical directly, with a fallback
+        if vertical == "Unknown":
+            logging.warning("Vertical not provided to reporting_agent; defaulting to 'Unknown'. The final summary may not apply specific rules.")
+        else:
+            logging.info(f"Using user-provided vertical for this report: {vertical}")
+        full_report['vertical'] = vertical
+
+
+        # **FIX**: Updated 'l1_category' to 'Taxonomy Path'
         attributes_to_assess = [
-            {"name": "MSID", "data_col": "MSID", "issue_col": "MSIDIssues?"},
-            {"name": "UPC", "data_col": "UPC", "issue_col": "UPCIssues?"},
-            {"name": "Brand", "data_col": "BRAND_NAME", "issue_col": "BrandIssues?"},
-            {"name": "Item Name", "data_col": "CONSUMER_FACING_ITEM_NAME", "issue_col": "Item Name Rule Issues"},
-            {"name": "Image", "data_col": "IMAGE_URL", "issue_col": "ImageIssues?"},
-            {"name": "Size", "data_col": "SIZE", "issue_col": "SizeIssues?"},
-            {"name": "UOM", "data_col": "UNIT_OF_MEASUREMENT", "issue_col": "UNIT_OF_MEASUREMENTIssues?"},
-            {"name": "Category", "data_col": "L1_CATEGORY", "issue_col": "CategoryIssues?"},
-            {"name": "Product Group", "data_col": "PRODUCT_GROUP", "issue_col": "ProductGroupIssues?"},
-            {"name": "Variant", "data_col": "VARIANT", "issue_col": "VariantIssues?"},
-            {"name": "Description", "data_col": "DESCRIPTION", "issue_col": "DescriptionIssues?"},
-            {"name": "Excluded Items", "data_col": "CONSUMER_FACING_ITEM_NAME", "issue_col": None},
+            {"name": "msid", "data_col": "MSID", "issue_col": "MSIDIssues?"},
+            {"name": "upc", "data_col": "UPC", "issue_col": "UPCIssues?"},
+            {"name": "brand", "data_col": "BRAND_NAME", "issue_col": "BrandIssues?"},
+            {"name": "consumer_facing_item_name", "data_col": "CONSUMER_FACING_ITEM_NAME", "issue_col": "Item Name Rule Issues"},
+            {"name": "photo_url", "data_col": "IMAGE_URL", "issue_col": "ImageIssues?"},
+            {"name": "size", "data_col": "SIZE", "issue_col": "SizeIssues?"},
+            {"name": "unit_of_measure", "data_col": "UNIT_OF_MEASUREMENT", "issue_col": "UNIT_OF_MEASUREMENTIssues?"},
+            {"name": "Taxonomy Path", "data_col": "Taxonomy Path", "issue_col": "CategoryIssues?"},
+            {"name": "product_group", "data_col": "PRODUCT_GROUP", "issue_col": "ProductGroupIssues?"},
+            {"name": "variant", "data_col": "VARIANT", "issue_col": "VariantIssues?"},
+            {"name": "short_description", "data_col": "DESCRIPTION", "issue_col": "DescriptionIssues?"},
+            {"name": "restricted_item_check", "data_col": "CONSUMER_FACING_ITEM_NAME", "issue_col": None},
         ]
 
         for attr in attributes_to_assess:
@@ -44,19 +53,18 @@ class Agent(BaseAgent):
             data_col = attr['data_col']
             issue_col = attr['issue_col']
 
-            # --- Robustly calculate coverage by treating empty strings and whitespace as empty ---
             coverage_count = 0
             if data_col in df.columns:
-                # Replace whitespace-only strings with NaN, then count non-null values
                 coverage_count = df[data_col].replace(r'^\s*$', np.nan, regex=True).notna().sum()
 
             duplicate_count = 0
-            if attr['name'] not in ['Brand', 'Image']:
-                subset_col = 'Taxonomy Path' if attr['name'] == 'Category' and 'Taxonomy Path' in df.columns else data_col
+            if attr['name'] not in ['brand', 'photo_url']:
+                # **FIX**: Logic now correctly references 'Taxonomy Path'
+                subset_col = 'Taxonomy Path' if attr['name'] == 'Taxonomy Path' and 'Taxonomy Path' in df.columns else data_col
                 if subset_col in df.columns:
                     duplicate_count = df[df.duplicated(subset=[subset_col], keep='first')].shape[0]
 
-            unique_category_count = df['Taxonomy Path'].nunique() if attr['name'] == 'Category' and 'Taxonomy Path' in df.columns else "N/A"
+            unique_category_count = df['Taxonomy Path'].nunique() if attr['name'] == 'Taxonomy Path' and 'Taxonomy Path' in df.columns else "N/A"
 
             issues_sample = []
             if issue_col and issue_col in df.columns:
@@ -84,10 +92,10 @@ class Agent(BaseAgent):
             5. "corrected_data_examples": A string. A brief description of what the corrected data should look like.
 
             **Specific Instructions for '{attr['name']}':**
-            - For **Brand**: Check if any item names in the sample (e.g., 'Tostitos Chips') have a brand but the 'BRAND_NAME' column is empty for that row.
-            - For **Item Name**: Check if any item names seem to be "modifier" items that require customer choices, like 'Build Your Own Pizza'.
-            - For **Size/UOM**: Check if any sizes or UOMs are generic or not customer-friendly (e.g., 'EACH', 'ONE', 'SF' instead of 'sq ft').
-            - For **Excluded Items**: Scan the item names in the data sample for products that DoorDash cannot sell, such as tobacco, vapes, or knives, and score the assessment based on their presence.
+            - For **brand**: Check if any item names in the sample (e.g., 'Tostitos Chips') have a brand but the 'BRAND_NAME' column is empty for that row.
+            - For **consumer_facing_item_name**: Check if any item names seem to be "modifier" items that require customer choices, like 'Build Your Own Pizza'.
+            - For **size/unit_of_measure**: Check if any sizes or UOMs are generic or not customer-friendly (e.g., 'EACH', 'ONE', 'SF' instead of 'sq ft').
+            - For **restricted_item_check**: Scan the item names in the data sample for products that DoorDash cannot sell, such as tobacco, vapes, or knives, and score the assessment based on their presence.
             """
 
             ai_response = self.call_ai(prompt, api_key, self.model)
@@ -106,9 +114,15 @@ class Agent(BaseAgent):
                 "bad_examples": ai_response.get("bad_data_examples", "N/A"),
                 "corrected_examples": ai_response.get("corrected_data_examples", "N/A"),
             }
-            if attr['name'] == 'Category':
+            # **FIX**: Logic now correctly references 'Taxonomy Path'
+            if attr['name'] == 'Taxonomy Path':
                 report_for_attr['unique_categories'] = unique_category_count
 
             full_report[attr['name']] = report_for_attr
+
+            # **NEW**: Log the complete report before returning it
+        logging.info("Master Reporting Agent finished. Final report structure:")
+        logging.info(json.dumps(full_report, indent=2))
+        
 
         return full_report

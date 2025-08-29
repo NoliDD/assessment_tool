@@ -5,15 +5,23 @@ import importlib
 import inspect
 import logging
 from io import BytesIO
-from reporting import generate_summary_text
 from utils import validate_api_key
 from agents.api_tracker import ApiUsageTracker
 import json
 import yaml
+from ui import add_footer
 
 # --- Page Setup ---
-st.set_page_config(layout="wide", page_title="Mx Data Assessment Tool", page_icon="✨🚀")
+# st.set_page_config(
+#     page_title="Data Assessment Tool",
+#     page_icon="✨🚀",
+#     layout="wide",
+#     initial_sidebar_state="expanded"
+# )
+
+# st.set_page_config(layout="wide", page_title="Mx Data Assessment Tool", page_icon="✨🚀")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 # --- Custom CSS for Modern Look ---
 def load_css():
@@ -232,7 +240,8 @@ def run_assessment_pipeline(agents, df, session, progress_bar, progress_text):
         step += 1
         progress_text.info(f"Step {step}/{total_steps}: Generating Attribute-by-Attribute Report...")
         progress_bar.progress(step / total_steps)
-        st.session_state.full_report = reporting_agent.assess(df, api_key=session.api_key)
+        # **FIX**: Pass the vertical to the reporting agent
+        st.session_state.full_report = reporting_agent.assess(df, vertical=session.vertical, api_key=session.api_key)
     if website_agent and session.api_key_validated:
         step += 1
         progress_text.info(f"Step {step}/{total_steps}: Generating Website Comparison Report...")
@@ -270,7 +279,8 @@ def run_assessment_pipeline(agents, df, session, progress_bar, progress_text):
     
     if final_summary_agent and session.api_key_validated:
         st.session_state.final_summary = final_summary_agent.assess(
-            summary_df, st.session_state.full_report, api_key=session.api_key)
+            #summary_df, st.session_state.full_report, api_key=session.api_key)
+        st.session_state.full_report, api_key=session.api_key)
             
     st.session_state.assessed_csv = df.to_csv(index=False).encode('utf-8')
     st.session_state.sample_30_csv = generate_sample_csv(df, ["UPC", "IMAGE_URL", "CONSUMER_FACING_ITEM_NAME", "SIZE", "UNIT_OF_MEASUREMENT"], 30)
@@ -396,6 +406,7 @@ with st.sidebar:
     st.session_state.style_guide = st.text_area("Style Guide", value=st.session_state.style_guide, height=150)
     run_button = st.button("🚀 Run Assessment", type="primary",
                            disabled=(st.session_state.uploaded_file_content is None))
+add_footer()
 
 # --- Main UI ---
 st.title("✨🚀 Merchant Data Assessment Tool")
@@ -434,7 +445,7 @@ if run_button:
 
 # --- Results Display (UPDATED WITH MODERN UI) ---
 if st.session_state.assessment_done:
-    st.page_link("pages/💬_2_Chat_with_Report.py", label="🧠", use_container_width=False)
+    # st.page_link("pages/💬_2_Chat_with_Report.py", label="🧠", use_container_width=False)
 
     st.header("📊 Assessment Results")
     
@@ -481,17 +492,19 @@ if st.session_state.assessment_done:
         if st.session_state.full_report:
             st.subheader("📋 Attribute-by-Attribute AI Commentary")
             rows = []
+            # **FIX**: Added a check to ensure 'data' is a dictionary before processing
             for attr, data in st.session_state.full_report.items():
-                if "error" in data:
-                    rows.append({"Attribute": attr, "Assessment": "Error", "Commentary": data["error"]})
-                else:
-                    rows.append({
-                        "Attribute": attr, "Coverage": data.get("coverage", "N/A"),
-                        "Duplicates": data.get("duplicates", "N/A"), "Unique Paths": str(data.get("unique_categories", "")),
-                        "Assessment": data.get("assessment", "N/A"), "Commentary": data.get("commentary", "N/A"),
-                        "Improvements Needed": data.get("improvements", "N/A"), "Bad Examples": data.get("bad_examples", "N/A"),
-                        "Corrected Examples": data.get("corrected_examples", "N/A")
-                    })
+                if isinstance(data, dict):
+                    if "error" in data:
+                        rows.append({"Attribute": attr, "Assessment": "Error", "Commentary": data["error"]})
+                    else:
+                        rows.append({
+                            "Attribute": attr, "Coverage": data.get("coverage", "N/A"),
+                            "Duplicates": data.get("duplicates", "N/A"), "Unique Paths": str(data.get("unique_categories", "")),
+                            "Assessment": data.get("assessment", "N/A"), "Commentary": data.get("commentary", "N/A"),
+                            "Improvements Needed": data.get("improvements", "N/A"), "Bad Examples": data.get("bad_examples", "N/A"),
+                            "Corrected Examples": data.get("corrected_examples", "N/A")
+                        })
             st.dataframe(pd.DataFrame(rows), use_container_width=True)
 
     with tab3:
@@ -532,3 +545,7 @@ if st.session_state.assessment_done:
     st.dataframe(usage_df, use_container_width=True)
 
     st.info("Use the Chat tab to ask AI questions about this report.")
+
+# call once near the end of each page:
+add_footer()
+

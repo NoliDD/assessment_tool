@@ -1,109 +1,133 @@
 {
-  "version": "v1",
+  "version": "v4",
   "source": "sku_coverage.csv",
   "rules": [
     {
-      "attribute": "Merchant Supplied ID (MSID)",
+      "attribute": "msid",
       "vertical": "All Verticals",
       "requirement": "Required",
-      "coverage_rule_text": "100% Coverage Minimum (Fails if Under)"
+      "coverage_rule_text": "100%"
     },
     {
-      "attribute": "UPC",
+      "attribute": "upc",
       "vertical": "All Verticals",
       "requirement": "Required",
-      "coverage_rule_text": "80% Coverage Minimum (Fails if Under)"
+      "coverage_rule_text": "80%"
     },
     {
-      "attribute": "Photo URL",
+      "attribute": "photo_url",
       "vertical": "All Verticals",
       "requirement": "Required",
-      "coverage_rule_text": "80% Coverage Minimum (Fails if Under)"
+      "coverage_rule_text": "80%"
     },
     {
-      "attribute": "Brand",
+      "attribute": "brand",
       "vertical": "All Verticals",
       "requirement": "Required",
-      "coverage_rule_text": "80% Coverage Minimum (Fails if Under)"
+      "coverage_rule_text": "80%"
     },
     {
-      "attribute": "Item Name",
+      "attribute": "consumer_facing_item_name",
       "vertical": "All Verticals",
       "requirement": "Required",
-      "coverage_rule_text": "100% Coverage Minimum (Fails if Under)"
+      "coverage_rule_text": "100%"
     },
     {
-      "attribute": "Size",
+      "attribute": "size",
       "vertical": "All Verticals",
       "requirement": "Required",
-      "coverage_rule_text": "80% Coverage Minimum (Fails if Under)"
+      "coverage_rule_text": "80%"
     },
     {
-      "attribute": "Unit Of Measure",
-      "vertical": "All Verticals (where applicable)",
-      "requirement": "Required",
-      "coverage_rule_text": "80% Coverage Minimum (Fails if Under)"
-    },
-    {
-      "attribute": "Mx Taxonomy",
+      "attribute": "unit_of_measure",
       "vertical": "All Verticals",
       "requirement": "Required",
-      "coverage_rule_text": "80% Coverage Minimum (Fails if Under)"
+      "coverage_rule_text": "80%"
     },
     {
-      "attribute": "Age-Restricted Item Identification\n(Alcohol, CBD/THC, etc.)",
-      "vertical": "All Verticals, specifically relevant to:  Alcohol, CnG, CBD/THC",
+      "attribute": "Taxonomy Path",
+      "vertical": "All Verticals",
+      "requirement": "Required",
+      "coverage_rule_text": "80%"
+    },
+    {
+      "attribute": "is_alcohol",
+      "vertical": "All Verticals",
       "requirement": "Required",
       "coverage_rule_text": "Fails if Age-Restricted items are Not Marked"
     },
     {
-      "attribute": "Data Excludes Items that DoorDash Can't Sell",
+      "attribute": "restricted_item_check",
       "vertical": "All Verticals",
       "requirement": "Required",
       "coverage_rule_text": "Fails if there are Categories of Items which are Restricted"
     },
     {
-      "attribute": "Product Group",
-      "vertical": "Needed for: Beauty, Shoes, Paint",
+      "attribute": "product_group",
+      "vertical": "Beauty",
       "requirement": "Required",
-      "coverage_rule_text": "80% Coverage Minimum (Fails if Under)"
+      "coverage_rule_text": "80%"
     },
     {
-      "attribute": "Variant",
-      "vertical": "Needed for: Beauty, Shoes, Paint",
+      "attribute": "product_group",
+      "vertical": "Shoes",
       "requirement": "Required",
-      "coverage_rule_text": "80% Coverage Minimum (Fails if Under)"
+      "coverage_rule_text": "80%"
     },
     {
-      "attribute": "Aux Photo URLs",
-      "vertical": "All Verticals",
-      "requirement": "Nice to Have"
+      "attribute": "product_group",
+      "vertical": "Paint",
+      "requirement": "Required",
+      "coverage_rule_text": "80%"
     },
     {
-      "attribute": "Details",
-      "vertical": "All Verticals",
-      "requirement": "Nice to Have"
+      "attribute": "variant",
+      "vertical": "Beauty",
+      "requirement": "Required",
+      "coverage_rule_text": "80%"
     },
     {
-      "attribute": "Weighted Items Identification Column",
+      "attribute": "variant",
+      "vertical": "Shoes",
+      "requirement": "Required",
+      "coverage_rule_text": "80%"
+    },
+    {
+      "attribute": "variant",
+      "vertical": "Paint",
+      "requirement": "Required",
+      "coverage_rule_text": "80%"
+    },
+    {
+      "attribute": "is_weighted_item",
       "vertical": "CnG",
       "requirement": "Required",
       "coverage_rule_text": "Fails if Weighted Items are Not Clearly Marked"
     },
     {
-      "attribute": "Average Weight",
+      "attribute": "average_weight_per_each",
       "vertical": "CnG",
       "requirement": "Required",
-      "coverage_rule_text": "100% Coverage on Count/Weight Weighted items (Fails if Under)"
+      "coverage_rule_text": "100%"
     },
     {
-      "attribute": "Price Look-Up Code (PLU)",
+      "attribute": "plu",
       "vertical": "CnG",
       "requirement": "Required",
-      "coverage_rule_text": "80% Coverage Minimum (Fails if Under)"
+      "coverage_rule_text": "80%"
     },
     {
-      "attribute": "SNAP",
+      "attribute": "additional_image_urls",
+      "vertical": "All Verticals",
+      "requirement": "Nice to Have"
+    },
+    {
+      "attribute": "short_description",
+      "vertical": "All Verticals",
+      "requirement": "Nice to Have"
+    },
+    {
+      "attribute": "snap_eligible",
       "vertical": "CnG",
       "requirement": "Nice to Have"
     }

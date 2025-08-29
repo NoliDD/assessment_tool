@@ -1,0 +1,52 @@
+{
+  "name": "data-assessment-tool",
+  "version": "1.0.0",
+  "description": "A desktop app for assessing data quality using Streamlit.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --mac --win --linux"
+  },
+  "keywords": [
+    "electron",
+    "streamlit",
+    "python"
+  ],
+  "author": "Nitesh Oli",
+  "devDependencies": {
+    "electron": "^28.2.1",
+    "electron-builder": "^24.9.1",
+    "electron-is-dev": "^2.0.0"
+  },
+  "dependencies": {
+    "electron-is-dev": "^2.0.0"
+  },
+  "build": {
+    "appId": "com.example.dataassessmenttool",
+    "files": [
+      "main.js"               
+    ],
+    "extraResources": [
+      { "from": ".streamlit", "to": ".streamlit" },
+      { "from": "ui.py", "to": "ui.py" },
+      {"from": "app_entry.py", "to": "app_entry.py" },
+      { "from": "streamlit_app.py", "to": "streamlit_app.py" },
+      { "from": "launch_app.py", "to": "launch_app.py" },
+      { "from": "sku_coverage_rules.json", "to": "sku_coverage_rules.json" },
+      { "from": "taxonomy.json", "to": "taxonomy.json" },
+      { "from": "assessment_instructions.yaml", "to": "assessment_instructions.yaml" },
+      { "from": "restricted_items.yaml", "to": "restricted_items.yaml" },
+      { "from": "utils.py", "to": "utils.py" },
+      { "from": "agents", "to": "agents" },
+      { "from": "pages", "to": "pages" },
+
+      { "from": "venv", "to": "venv" }
+    ],
+    "asarUnpack": ["**/venv/**"],
+    "mac": { "icon": "build/icon.icns" },
+    "win": { "icon": "build/icon.ico" },
+    "icon": "build/icon.png"
+  }
+}
+
+
