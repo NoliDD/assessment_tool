@@ -3,17 +3,78 @@ import pandas as pd
 import json
 import logging
 import numpy as np
+import re
 
 class Agent(BaseAgent):
     def __init__(self):
         super().__init__("Master Reporting")
         self.model = "gpt-5-chat-latest"
 
+    # ---------- Unicode + JSON cleanup helpers ----------
+    def _unescape_unicode(self, s: str) -> str:
+        """Turn \\uXXXX sequences into real characters."""
+        if not isinstance(s, str):
+            return s
+        return re.sub(r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), s)
+
+    def _normalize_text(self, s: str, prefer_ascii: bool = True) -> str:
+        """Unescape + normalize a few symbols; keep ✅ as emoji (no \\u2705)."""
+        if not isinstance(s, str):
+            return s
+        s = self._unescape_unicode(s)
+        if prefer_ascii:
+            s = (s
+                 .replace("→", "->")
+                 .replace("–", "-")
+                 .replace("—", "-"))
+        return s
+
+    def _clean_field(self, x):
+        """Recursively clean dict/list/str."""
+        if isinstance(x, str):
+            return self._normalize_text(x, prefer_ascii=True)
+        if isinstance(x, list):
+            return [self._clean_field(v) for v in x]
+        if isinstance(x, dict):
+            return {k: self._clean_field(v) for k, v in x.items()}
+        return x
+
+    def _coerce_examples_to_text(self, value) -> str:
+        """
+        Accepts:
+          - a plain string,
+          - a JSON-encoded string (e.g., "[\"\\u2705 foo\", \"bar\"]"),
+          - a Python list of strings.
+        Returns a clean bullet-list string with real characters (no \\uXXXX).
+        """
+        # If it's a string that *looks* like a JSON array, try to parse it
+        if isinstance(value, str):
+            txt = value.strip()
+            # First unescape any \uXXXX so parse attempts aren't double-escaped garbage
+            txt_unescaped = self._unescape_unicode(txt)
+
+            if txt_unescaped.startswith('[') and txt_unescaped.endswith(']'):
+                try:
+                    parsed = json.loads(txt_unescaped)
+                    if isinstance(parsed, list):
+                        items = [self._normalize_text(str(it), prefer_ascii=True) for it in parsed]
+                        return "\n".join(f"- {it}" for it in items)
+                except Exception:
+                    # fall through to treat it as plain text
+                    pass
+            # Plain string: normalize and return
+            return self._normalize_text(txt_unescaped, prefer_ascii=True)
+
+        # If it is already a list, join nicely
+        if isinstance(value, list):
+            items = [self._normalize_text(str(it), prefer_ascii=True) for it in value]
+            return "\n".join(f"- {it}" for it in items)
+
+        # Fallback
+        return self._normalize_text(str(value), prefer_ascii=True)
+    # ----------------------------------------------------
+
     def _get_attribute_specific_instructions(self, attr_name: str, vertical: str) -> str:
-        """
-        Provides detailed, attribute-specific instructions for the AI to improve assessment accuracy.
-        This acts as a dynamic rulebook for the LLM.
-        """
         instructions = {
             "brand": "Focus on consistency and accuracy. Is the brand name correctly populated, or is it mixed into the item name? A 'Perfect' score requires high coverage and consistent brand names. Downgrade if brands are missing where implied by the item name (e.g., 'Tostitos Chips' with an empty BRAND_NAME field).",
             "consumer_facing_item_name": "Assess for customer readability and completeness. Are names clear, or full of internal codes or repeated information (like brand/size)? 'Modifier' items needing customer choices (e.g., 'Build Your Own Pizza') are critical issues. 'Perfect' means names are clean, descriptive, and unique.",
@@ -28,16 +89,9 @@ class Agent(BaseAgent):
             "short_description": "Assess for quality and value. Is the description unique and informative, or generic and unhelpful? Good descriptions enhance customer experience. 'Perfect' means high coverage of unique, well-written descriptions.",
             "restricted_item_check": "This is a critical compliance check. Scan item names in the sample for products that cannot be sold (e.g., tobacco, CBD, lottery tickets, weapons). The presence of even ONE such item should result in a 'Missing or Unusable' score for this check.",
         }
-        # Default instruction if no specific rule is found
-        default_instruction = "Assess this attribute for overall completeness, consistency, and accuracy based on the provided data sample."
-        return instructions.get(attr_name, default_instruction)
-
+        return instructions.get(attr_name, "Assess this attribute for overall completeness, consistency, and accuracy based on the provided data sample.")
 
     def assess(self, df: pd.DataFrame, vertical: str = "Unknown", api_key: str = None) -> dict:
-        """
-        Analyzes the fully assessed DataFrame to generate a structured report
-        for each attribute, using an optimized prompt for more accurate AI assessments.
-        """
         logging.info("Running Master Reporting Agent with optimized prompt...")
         if not api_key:
             logging.warning("OpenAI API key not provided. Skipping report generation.")
@@ -45,12 +99,6 @@ class Agent(BaseAgent):
 
         full_report = {}
         total_skus = len(df)
-        logging.info(f"Total SKUs calculated: {total_skus}")
-
-        if vertical == "Unknown":
-            logging.warning("Vertical not provided to reporting_agent; defaulting to 'Unknown'.")
-        else:
-            logging.info(f"Using user-provided vertical for this report: {vertical}")
         full_report['vertical'] = vertical
 
         attributes_to_assess = [
@@ -69,101 +117,99 @@ class Agent(BaseAgent):
         ]
 
         for attr in attributes_to_assess:
-            logging.info(f"Generating report for attribute: {attr['name']}...")
-
             data_col = attr['data_col']
             issue_col = attr['issue_col']
 
-            # --- Robust Coverage Calculation ---
+            # Coverage
             coverage_count = 0
             if data_col in df.columns:
-                s = df[data_col].copy()
-                s = s.astype(str).str.strip()
+                s = df[data_col].copy().astype(str).str.strip()
                 s_lower = s.str.lower()
                 s[s_lower.isin(['nan', 'none', 'null', 'undefined'])] = np.nan
                 coverage_count = s.notna().sum()
-            
+
+            # Duplicates
             duplicate_count = 0
             if data_col in df.columns and attr['name'] not in ['brand', 'photo_url']:
                 subset_col = 'Taxonomy Path' if attr['name'] == 'Taxonomy Path' else data_col
                 if subset_col in df.columns:
                     duplicate_count = df[df.duplicated(subset=[subset_col], keep='first')].shape[0]
 
-            unique_category_count = df['Taxonomy Path'].nunique() if attr['name'] == 'Taxonomy Path' and 'Taxonomy Path' in df.columns else "N/A"
+            unique_category_count = (
+                df['Taxonomy Path'].nunique()
+                if attr['name'] == 'Taxonomy Path' and 'Taxonomy Path' in df.columns
+                else "N/A"
+            )
 
+            # Issue sample
             issues_sample = []
             if issue_col and issue_col in df.columns:
                 issue_rows = df[df[issue_col].astype(str).str.strip().ne('')]
-                issues_sample = issue_rows[issue_col].head(5).tolist()
+                raw_sample = issue_rows[issue_col].head(5).tolist()
+                issues_sample = [self._clean_field(s) for s in raw_sample]
+            issues_sample_json = json.dumps(issues_sample, indent=2, ensure_ascii=False)
 
-            sample_size = 30
-            actual_sample_size = min(sample_size, len(df))
-            data_sample_str = df.sample(n=actual_sample_size).to_string() if actual_sample_size > 0 else "No data to sample."
-            
+            # Data sample
+            sample_n = min(30, len(df))
+            data_sample_str = df.sample(n=sample_n).to_string() if sample_n > 0 else "No data to sample."
+            data_sample_str = self._clean_field(data_sample_str)
+
             specific_instructions = self._get_attribute_specific_instructions(attr['name'], vertical)
 
             prompt = f"""
-            You are an expert data quality consultant with a deep understanding of e-commerce standards. Your task is to provide a precise and actionable assessment for the '{attr['name']}' attribute.
+            You are an expert data quality consultant with a deep understanding of e-commerce standards. Provide a precise and actionable assessment for the '{attr['name']}' attribute.
 
-            **Your Goal:** Evaluate the data based on the provided metrics and data sample to determine its quality and readiness for an e-commerce platform.
-
-            **Step-by-Step Analysis Guide (Think through these steps before giving your JSON response):**
-            1.  **Quantitative Review:** Look at the `coverage` and `duplicates` count. Is the coverage high? This sets the baseline. Low coverage is a major red flag.
-            2.  **Qualitative Review:** Examine the `Qualitative Data Sample`. Does the data *look* correct and consistent? Compare this with the `Pre-flagged Issues Sample`.
-            3.  **Apply Specific Instructions:** Use the rules below to guide your judgment for this specific attribute.
-            4.  **Synthesize and Score:** Combine your findings to assign an `assessment_score` based on the rubric below.
-            5.  **Summarize:** Write your `commentary` and `improvements_needed` based on your analysis. Be specific and actionable.
-
-            **Assessment Score Rubric:**
-            - **"Perfect"**: Coverage is very high (>98%), duplicates are minimal, and the data sample shows consistent, high-quality, standardized values.
-            - **"Has Some Issues/Nuances to Accommodate"**: The attribute is mostly populated but has correctable problems like inconsistent formatting, moderate coverage (80-98%), or some inaccuracies. The data is usable but requires cleanup.
-            - **"Missing or Unusable"**: Coverage is low (<80%), the attribute is mostly empty, or the data shows critical errors, placeholder text, or is fundamentally incorrect. The data requires significant intervention.
+            **Assessment Score Rubric**
+            - "Perfect": 100% coverage, few/no duplicates, consistent/standardized values.
+            - "Has Some Issues/Nuances to Accommodate": Mostly populated but with fixable issues (e.g., 80–98% coverage, inconsistent formatting).
+            - "Missing or Unusable": Low coverage (<80%), mostly empty, or fundamentally incorrect/placeholder values.
 
             ---
-            **Data for '{attr['name']}' Attribute:**
-
-            **1. Quantitative Metrics:**
+            **1) Quantitative Metrics**
             - Total SKUs: {total_skus}
             - Coverage: {coverage_count} / {total_skus}
             - Duplicates: {duplicate_count}
-            - Pre-flagged Issues Sample: {json.dumps(issues_sample, indent=2)}
+            - Pre-flagged Issues Sample:
+            {issues_sample_json}
 
-            **2. Qualitative Data Sample ({actual_sample_size} random rows):**
-            ```
+            **2) Qualitative Sample ({sample_n} random rows)**
             {data_sample_str}
-            ```
 
-            **3. Specific Instructions for this Attribute:**
+            **3) Attribute-Specific Guidance**
             - {specific_instructions}
 
             ---
-            **Your Task:**
-            Based on your step-by-step analysis, provide a JSON object with ONLY the following keys. Be concise and direct.
-
+            **Return ONLY this JSON object:**
             {{
-                "assessment_score": "...",
-                "commentary": "...",
-                "improvements_needed": "...",
-                "bad_data_examples": "...",
-                "corrected_data_examples": "..."
+            "assessment_score": "...",
+            "commentary": "...",
+            "improvements_needed": "...",
+            "bad_data_examples": "...",        // may be a list OR a stringified JSON list
+            "corrected_data_examples": "..."
             }}
             """
 
             ai_response = self.call_ai(prompt, api_key, self.model)
-
             if "error" in ai_response:
                 full_report[attr['name']] = {"error": ai_response["error"]}
                 continue
 
-            coverage_percentage = (coverage_count / total_skus * 100) if total_skus > 0 else 0
+            # Clean/normalize all AI fields
+            cleaned = {k: self._clean_field(v) for k, v in ai_response.items()}
+
+            # Special handling: examples may be list OR stringified JSON
+            bad_ex = self._coerce_examples_to_text(cleaned.get("bad_data_examples", ""))
+            corr_ex = self._coerce_examples_to_text(cleaned.get("corrected_data_examples", ""))
+
+            coverage_pct = (coverage_count / total_skus * 100) if total_skus > 0 else 0.0
             report_for_attr = {
-                "coverage": f"{coverage_count} / {total_skus} ({coverage_percentage:.2f}%)",
+                "coverage": f"{coverage_count} / {total_skus} ({coverage_pct:.2f}%)",
                 "duplicates": duplicate_count,
-                "assessment": ai_response.get("assessment_score", "N/A"),
-                "commentary": ai_response.get("commentary", "N/A"),
-                "improvements": ai_response.get("improvements_needed", "N/A"),
-                "bad_examples": ai_response.get("bad_data_examples", "N/A"),
-                "corrected_examples": ai_response.get("corrected_data_examples", "N/A"),
+                "assessment": cleaned.get("assessment_score", "N/A"),
+                "commentary": cleaned.get("commentary", "N/A"),
+                "improvements": cleaned.get("improvements_needed", "N/A"),
+                "bad_examples": bad_ex,
+                "corrected_examples": corr_ex,
             }
             if attr['name'] == 'Taxonomy Path':
                 report_for_attr['unique_categories'] = unique_category_count
@@ -171,6 +217,5 @@ class Agent(BaseAgent):
             full_report[attr['name']] = report_for_attr
 
         logging.info("Master Reporting Agent finished. Final report structure:")
-        logging.info(json.dumps(full_report, indent=2))
-        
+        logging.info(json.dumps(full_report, indent=2, ensure_ascii=False))
         return full_report

@@ -397,8 +397,8 @@ with st.sidebar:
         st.session_state.api_key_validated = False
     
     st.session_state.agent_model = st.selectbox("Select AI Model for Agents",
-        ["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"],
-        index=["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"].index(st.session_state.agent_model))
+        ["gpt-5-chat-latest", "gpt-4o"],
+        index=["gpt-5-chat-latest", "gpt-4o"].index(st.session_state.agent_model))
         
     st.session_state.website_url = st.text_input("Merchant Website URL", value=st.session_state.website_url)
     uploaded_file = st.file_uploader("1. Upload Merchant Data File", type=["csv", "xlsx"])
@@ -458,7 +458,7 @@ st.title("✨🚀 Merchant Data Assessment Tool")
 
 if not st.session_state.assessment_done and not run_button:
     st.info("👋 Welcome! Upload your data and configure the settings in the sidebar to begin.")
-    st.markdown("ℹ️ Note: The assessment rules and taxonomy are now embedded in the app.")
+    # st.markdown("ℹ️ Note: The assessment rules and taxonomy are now embedded in the app.")
 
 status_placeholder = st.empty()
 

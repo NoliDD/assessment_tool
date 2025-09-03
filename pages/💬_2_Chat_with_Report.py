@@ -111,8 +111,8 @@ st.success("API key is valid. You can now chat with your report.")
 with st.sidebar:
     st.subheader("Chat Configuration")
     st.session_state.ai_model = st.selectbox("Select AI Model for Chat",
-        ["gpt-5", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o", "gpt-5-chat-latest"],
-        index=["gpt-5", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o", "gpt-5-chat-latest"].index(st.session_state.ai_model))
+        ["gpt-5-chat-latest", "gpt-4o"],
+        index=["gpt-5-chat-latest", "gpt-4o"].index(st.session_state.ai_model))
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
