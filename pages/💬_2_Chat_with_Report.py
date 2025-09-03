@@ -91,7 +91,7 @@ if not st.session_state.get('assessment_done'):
 if not st.session_state.get('api_key_validated'):
     st.error("No valid OpenAI API key found. Please return to the main page and enter a valid key.")
     st.page_link("streamlit_app.py", label="Go to Main Page", icon="🏠")
-    add_footer()
+    add_footer() 
     st.stop()
 
 

@@ -1,5 +1,5 @@
 // main.js (Electron main process)
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, shell } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -8,7 +8,8 @@ const http = require('http');
 let pyProc = null;
 
 const PORT = process.env.APP_PORT || '8501';
-const URL  = `http://127.0.0.1:${PORT}`;
+const APP_URL = `http://127.0.0.1:${PORT}`;
+const HEALTH_URL = `${APP_URL}/_stcore/health`; // Streamlit built-in health
 
 // Resolve a base resources directory for dev vs packaged
 function resolveResourcesBase() {
@@ -67,30 +68,44 @@ function waitForHttp(url, timeoutMs = 60000) {
 async function createWindow() {
   const win = new BrowserWindow({
     width: 1280, height: 800, minWidth: 900, minHeight: 600,
-    webPreferences: { contextIsolation: true }
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true
+    }
   });
 
-  // Friendly loader so it’s not a white page
-  // win.loadURL('data:text/html,' + encodeURIComponent('<h2 style="font-family:sans-serif;padding:24px">Starting…</h2>'));
+  // Friendly loader so it’s not a white page (UTF-8 safe)
   win.loadURL(
-  'data:text/html;charset=utf-8,' +
-  encodeURIComponent(`<!doctype html>
+    'data:text/html;charset=utf-8,' +
+    encodeURIComponent(`<!doctype html>
 <meta charset="utf-8">
 <style>
   body{font-family:-apple-system,system-ui,Segoe UI,Roboto,sans-serif;padding:24px}
 </style>
 <h2>Starting…</h2>`)
-);
+  );
+
+  // Keep the window pinned to your local Streamlit app
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith(APP_URL)) return { action: 'allow' };
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (e, url) => {
+    if (!url.startsWith(APP_URL)) { e.preventDefault(); shell.openExternal(url); }
+  });
 
   // Resolve important paths
   const python = resolvePython();
-  const appPy  = resourcesPath('app_entry.py');
+  const appPy  = resourcesPath('app_entry.py'); // entry file
   const rules  = resourcesPath('sku_coverage_rules.json');
   const taxonomy = resourcesPath('taxonomy.json');
 
-  // Basic presence checks (app can still run without taxonomy/rules if you want)
+  // Basic presence checks
   if (!fs.existsSync(appPy)) {
-    dialog.showErrorBox('Missing file', `streamlit_app.py not found at:\n${appPy}`);
+    dialog.showErrorBox('Missing file', `app_entry.py not found at:\n${appPy}`);
     return;
   }
   console.log('isPackaged:', app.isPackaged);
@@ -112,18 +127,18 @@ async function createWindow() {
     BROWSER: 'none',
     STREAMLIT_BROWSER_GATHER_USAGE_STATS: 'false',
 
-    // <-- pass absolute paths so Python never relies on cwd-only lookups
-    SKU_COVERAGE_JSON: rules,             // for final_summary_agent
-    TAXONOMY_JSON: taxonomy,              // fixes "No local 'taxonomy.json' found"
-    APP_RESOURCES_DIR: RES_BASE,          // helpful generic base dir
+    // pass absolute paths so Python never relies on cwd-only lookups
+    SKU_COVERAGE_JSON: rules,
+    TAXONOMY_JSON: taxonomy,
+    APP_RESOURCES_DIR: RES_BASE,
 
     // Make project modules importable (agents/pages/etc.)
     PYTHONPATH: [
       RES_BASE,
       resourcesPath('agents'),
       resourcesPath('pages'),
-      resourcesPath('reporting'),  // include if present
-      resourcesPath('utils')       // include if present
+      resourcesPath('reporting'),
+      resourcesPath('utils')
     ].join(sep),
 
     // Help find python on macOS/Linux if PATH is minimal
@@ -134,7 +149,8 @@ async function createWindow() {
   pyProc = spawn(python, [
     '-m', 'streamlit', 'run', appPy,
     '--server.port', String(PORT),
-    '--server.headless', 'true'
+    '--server.headless', 'true',
+    '--server.address', '127.0.0.1' // restrict to localhost
   ], { env, cwd: RES_BASE });
 
   pyProc.stdout.on('data', d => console.log('[py]', String(d)));
@@ -142,14 +158,13 @@ async function createWindow() {
   pyProc.on('exit', code => console.log('Python exited:', code));
 
   try {
-    await waitForHttp(URL, 60000);
-    await win.loadURL(URL);
+    // Prefer health URL, then load app (fallback to app URL even if health fails)
+    await waitForHttp(HEALTH_URL, 60000);
+    await win.loadURL(APP_URL);
   } catch (err) {
-    console.error('Server not ready:', err.message);
-    win.webContents.openDevTools({ mode: 'detach' });
-    win.webContents.executeJavaScript(
-      `document.body.innerHTML="<pre style='padding:24px'>Failed to start server.\\n${err.message}</pre>"`
-    );
+    console.error('Health check failed:', err.message);
+    // Try to load the app anyway after a short delay
+    setTimeout(() => win.loadURL(APP_URL), 1500);
   }
 
   win.webContents.on('did-fail-load', (e, code, desc) => {

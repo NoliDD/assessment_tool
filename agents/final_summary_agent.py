@@ -276,7 +276,7 @@ You are a data quality consultant writing a final report. Your task is to provid
 
 Your output MUST be a valid JSON object with this exact structure:
 - `eligibility_score`: (string) "Eligible for GP" or "Not Eligible for GP".
-- `narrative_summary`: (string) A comprehensive, prose-style summary formatted with Markdown.
+- `narrative_summary`: (string) A brief, prose-style summary formatted with Markdown.
 
 **Analysis Context:**
 ```json

@@ -9,19 +9,17 @@ from utils import validate_api_key
 from agents.api_tracker import ApiUsageTracker
 import json
 import yaml
+import numpy as np
+import re
+import nest_asyncio
 from ui import add_footer
 
-# --- Page Setup ---
-# st.set_page_config(
-#     page_title="Data Assessment Tool",
-#     page_icon="✨🚀",
-#     layout="wide",
-#     initial_sidebar_state="expanded"
-# )
+# --- FIX: Apply nest_asyncio patch to prevent "Event loop is closed" error ---
+nest_asyncio.apply()
 
+# --- Page Setup ---
 # st.set_page_config(layout="wide", page_title="Mx Data Assessment Tool", page_icon="✨🚀")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 
 # --- Custom CSS for Modern Look ---
 def load_css():
@@ -139,13 +137,12 @@ default_session_state = {
     "website_comparison_report": None, "final_summary": None,
     "assessed_csv": None, "sample_30_csv": None, "sample_50_csv": None,
     "assessment_done": False,
-    "agent_model": "gpt-5-chat-latest" # New session state variable for agent model
+    "agent_model": "gpt-5-chat-latest"
 }
 for key, val in default_session_state.items():
     if key not in st.session_state:
         st.session_state[key] = val
 
-# --- ADDED: Initialize the API tracker in the session state ---
 if 'api_tracker' not in st.session_state:
     st.session_state.api_tracker = ApiUsageTracker()
 
@@ -169,24 +166,56 @@ def discover_agents():
     return agents
 
 @st.cache_data
-def load_dataframe(file_content, file_name):
-    """Loads a dataframe from file content, caching the result."""
+def load_and_standardize_dataframe(file_content, file_name):
+    """
+    Loads a dataframe from file content and standardizes column names
+    to ensure consistency for all downstream agents. This function is cached
+    and contains no Streamlit UI elements.
+    """
     try:
-        # --- FIX: Specify dtype for MSID to preserve leading zeros ---
-        dtype_spec = {'BUSINESS_ID': str, 'MSID': str, 'UPC': str} # Also good practice for UPC
+        dtype_spec = {'BUSINESS_ID': str, 'MSID': str, 'UPC': str}
         
         if file_name.lower().endswith('.csv'):
-            return pd.read_csv(BytesIO(file_content), low_memory=False, dtype=dtype_spec)
+            df = pd.read_csv(BytesIO(file_content), low_memory=False, dtype=dtype_spec)
         elif file_name.lower().endswith(('.xls', '.xlsx')):
-            return pd.read_excel(BytesIO(file_content), dtype=dtype_spec)
+            df = pd.read_excel(BytesIO(file_content), dtype=dtype_spec)
         else:
-            st.error("Unsupported file type. Please upload a CSV or XLSX file.")
+            logging.error("Unsupported file type provided.")
             return None
+
+        # --- Column Standardization Logic ---
+        column_mapping = {
+            'merchant supplied id (msid)': 'MSID', 
+            'item name': 'CONSUMER_FACING_ITEM_NAME',
+            'brand': 'BRAND_NAME', 
+            'photo url': 'IMAGE_URL', 
+            'size': 'SIZE',
+            'unit of measure': 'UNIT_OF_MEASUREMENT', 
+            'uom': 'UNIT_OF_MEASUREMENT',
+            'l1 category': 'L1_CATEGORY', 'l2 category': 'L2_CATEGORY',
+            'l3 category': 'L3_CATEGORY', 'l4 category': 'L4_CATEGORY',
+            'product group': 'PRODUCT_GROUP', 
+            'variant': 'VARIANT', 
+            'details': 'DESCRIPTION',
+            'short_description': 'DESCRIPTION', 
+            'weighted item': 'IS_WEIGHTED_ITEM',
+            'average weight': 'AVERAGE_WEIGHT_PER_EACH', 
+            'snap': 'SNAP_ELIGIBLE', 
+            'plu': 'PLU'
+        }
+        canonical_map = {k: v for k, v in column_mapping.items()}
+        for target_name in column_mapping.values():
+            canonical_map[target_name.lower()] = target_name
+        
+        df.rename(columns=lambda c: canonical_map.get(c.strip().lower(), c), inplace=True)
+        logging.info(f"Standardized columns. New columns: {df.columns.tolist()}")
+        return df
+        
     except Exception as e:
-        st.error(f"Error reading file: {e}")
+        logging.error(f"Error reading and standardizing file: {e}")
         return None
 
-# --- Helper Functions (from original script) ---
+# --- Helper Functions ---
 def configure_agent(agent, session):
     mapping = {
         'taxonomy_df': 'taxonomy_df', 'vertical': 'vertical',
@@ -195,103 +224,130 @@ def configure_agent(agent, session):
     for agent_attr, session_key in mapping.items():
         if hasattr(agent, agent_attr):
             setattr(agent, agent_attr, session.get(session_key))
-    # New logic to set a dedicated model for AI agents
     if hasattr(agent, 'model'):
         setattr(agent, 'model', session.get('agent_model'))
 
 def run_assessment_pipeline(agents, df, session, progress_bar, progress_text):
-    # This function remains the same as the original script's logic
     reporting_agent = next((a for a in agents if a.attribute_name == "Master Reporting"), None)
     website_agent = next((a for a in agents if a.attribute_name == "Website Comparison"), None)
     final_summary_agent = next((a for a in agents if a.attribute_name == "Final Summary"), None)
     concat_agent = next((a for a in agents if a.attribute_name == "Nexla Concatenation"), None)
-    # assessment_agents = [a for a in agents if a.attribute_name not in
-    #                      ["Master Reporting", "Website Comparison", "Final Summary", "Nexla Concatenation"]]
-    # logging.info(f"agents: {assessment_agents}")
 
     EXCLUDE = {"Master Reporting", "Website Comparison", "Final Summary", "Nexla Concatenation"}
-
-    # keep original order but put Category first
     assessment_agents = [a for a in agents if getattr(a, "attribute_name", "").strip() not in EXCLUDE]
     assessment_agents.sort(key=lambda a: 0 if getattr(a, "attribute_name", "").strip().lower().startswith("category") else 1)
 
-    total_steps = len(assessment_agents) + 5
+    total_steps = len(assessment_agents)
+    if session.is_nexla and concat_agent:
+        total_steps += 1
+    if reporting_agent and session.api_key_validated:
+        total_steps += 1
+    if website_agent and session.api_key_validated:
+        total_steps += 1
+    total_steps += 3 
+
     step = 0
+    
+    # --- Centralized Data Cleaning Step for Calculations ---
+    step += 1
+    progress_text.info(f"Step {step}/{total_steps}: Standardizing data types for calculation...")
+    progress_bar.progress(min(1.0, step / total_steps))
+    
+    boolean_flags = ['IS_WEIGHTED_ITEM', 'IS_ALCOHOL', 'IS_CBD', 'SNAP_ELIGIBLE']
+    for flag_col in boolean_flags:
+        if flag_col in df.columns:
+            df[flag_col] = pd.to_numeric(df[flag_col], errors='coerce')
+    
+    logging.info("Data types standardized for all agents.")
+    
     if session.is_nexla and concat_agent:
         step += 1
         progress_text.info(f"Step {step}/{total_steps}: Running Nexla Concatenation...")
-        progress_bar.progress(step / total_steps)
+        progress_bar.progress(min(1.0, step / total_steps))
         df = concat_agent.assess(df)
+
     for agent in assessment_agents:
         step += 1
         progress_text.info(f"Step {step}/{total_steps}: Running {agent.attribute_name} Agent...")
-        progress_bar.progress(step / total_steps)
+        progress_bar.progress(min(1.0, step / total_steps))
         configure_agent(agent, session)
-        if 'api_key' in inspect.signature(agent.assess).parameters:
+        
+        agent_params = inspect.signature(agent.assess).parameters
+        if 'api_key' in agent_params:
             df = agent.assess(df, api_key=session.api_key)
         else:
             df = agent.assess(df)
+
     step += 1
-    progress_text.info(f"Step {step}/{total_steps}: Reordering columns...")
-    progress_bar.progress(step / total_steps)
-    df = reorder_columns_for_readability(df, session.is_nexla)
-    st.session_state.assessed_df = df
-    if reporting_agent and session.api_key_validated:
-        step += 1
-        progress_text.info(f"Step {step}/{total_steps}: Generating Attribute-by-Attribute Report...")
-        progress_bar.progress(step / total_steps)
-        # **FIX**: Pass the vertical to the reporting agent
-        st.session_state.full_report = reporting_agent.assess(df, vertical=session.vertical, api_key=session.api_key)
-    if website_agent and session.api_key_validated:
-        step += 1
-        progress_text.info(f"Step {step}/{total_steps}: Generating Website Comparison Report...")
-        progress_bar.progress(step / total_steps)
-        st.session_state.website_comparison_report = website_agent.assess(
-            df, api_key=session.api_key, website_url=session.website_url)
-    step += 1
-    progress_text.info(f"Step {step}/{total_steps}: Generating final summaries...")
-    progress_bar.progress(step / total_steps)
+    progress_text.info(f"Step {step}/{total_steps}: Generating summaries...")
+    progress_bar.progress(min(1.0, step / total_steps))
     
-    # Updated logic to use the detailed summary output
     summary_data = [agent.get_summary(df) for agent in assessment_agents]
     summary_df = pd.DataFrame(summary_data)
     total_skus = len(df)
     
-    # Bug Fix: Convert 'issue_count' to numeric before performing division
     summary_df['issue_count'] = pd.to_numeric(summary_df['issue_count'], errors='coerce').fillna(0)
     summary_df['Issue Rate'] = summary_df.apply(
         lambda row: f"{(row['issue_count'] / total_skus * 100):.2f}%" if total_skus > 0 else "0.00%", axis=1)
     
-    # Clean up column names for display
     summary_df.rename(columns={'name': 'Attribute', 'issue_count': 'Issues Found'}, inplace=True)
-    # st.session_state.summary_df = summary_df[['Attribute', 'Issues Found', 'Issue Rate']]
-
-    # NEW: Create a comprehensive summary_df for display
-    # This includes all the metrics from the get_summary() methods
-    display_cols = ['Attribute', 'Issues Found', 'Issue Rate']
     
-    # Add new columns if they exist in the summary data
+    display_cols = ['Attribute', 'Issues Found', 'Issue Rate']
     for col in ['coverage_count', 'duplicate_count']:
         if col in summary_df.columns:
             display_cols.append(col)
             
     st.session_state.summary_df = summary_df[display_cols]
-    
-    if final_summary_agent and session.api_key_validated:
-        st.session_state.final_summary = final_summary_agent.assess(
-            #summary_df, st.session_state.full_report, api_key=session.api_key)
-        st.session_state.full_report, api_key=session.api_key)
+
+    if reporting_agent and session.api_key_validated:
+        step += 1
+        progress_text.info(f"Step {step}/{total_steps}: Generating Attribute-by-Attribute Report...")
+        progress_bar.progress(min(1.0, step / total_steps))
+        st.session_state.full_report = reporting_agent.assess(df, vertical=session.vertical, api_key=session.api_key)
+
+    if website_agent and session.api_key_validated:
+        step += 1
+        progress_text.info(f"Step {step}/{total_steps}: Generating Website Comparison Report...")
+        progress_bar.progress(min(1.0, step / total_steps))
+        st.session_state.website_comparison_report = website_agent.assess(df, api_key=session.api_key, website_url=session.website_url)
             
-    st.session_state.assessed_csv = df.to_csv(index=False).encode('utf-8')
-    st.session_state.sample_30_csv = generate_sample_csv(df, ["UPC", "IMAGE_URL", "CONSUMER_FACING_ITEM_NAME", "SIZE", "UNIT_OF_MEASUREMENT"], 30)
-    st.session_state.sample_50_csv = generate_sample_csv(df, ["MSID", "IMAGE_URL"], 50)
+    if final_summary_agent and session.api_key_validated:
+        st.session_state.final_summary = final_summary_agent.assess(st.session_state.full_report, api_key=session.api_key)
+            
+    step += 1
+    progress_text.info(f"Step {step}/{total_steps}: Preparing final report for display...")
+    progress_bar.progress(min(1.0, step / total_steps))
+    
+    # --- **FIX**: New, more robust final cleanup function for display ---
+    logging.info("Performing final cleanup of the assessed DataFrame for display.")
+    display_df = df.copy()
+
+    # Convert boolean columns to clean True/False strings for display
+    for flag_col in boolean_flags:
+        if flag_col in display_df.columns:
+            display_df[flag_col] = display_df[flag_col].apply(lambda x: 'True' if x == 1.0 else ('False' if x == 0.0 else ''))
+
+    # Convert all other columns to string type to prevent mixed-type errors
+    for col in display_df.columns:
+        if col not in boolean_flags:
+             # Fill NaNs before converting to string to avoid issues
+             display_df[col] = display_df[col].fillna('').astype(str).replace(r'\.0$', '', regex=True)
+
+    # Final sweep for any 'nan' strings that might have been created
+    display_df.replace('nan', '', regex=True, inplace=True)
+    display_df = reorder_columns_for_readability(display_df, session.is_nexla)
+    st.session_state.assessed_df = display_df
+    # --- End of New Cleanup Step ---
+            
+    st.session_state.assessed_csv = display_df.to_csv(index=False).encode('utf-8')
+    st.session_state.sample_30_csv = generate_sample_csv(display_df, ["UPC", "IMAGE_URL", "CONSUMER_FACING_ITEM_NAME", "SIZE", "UNIT_OF_MEASUREMENT"], 30)
+    st.session_state.sample_50_csv = generate_sample_csv(display_df, ["MSID", "IMAGE_URL"], 50)
     st.session_state.assessment_done = True
     progress_text.success("✅ Assessment complete!")
     st.balloons()
 
 
 def reorder_columns_for_readability(df, is_nexla):
-    # This function remains the same as the original script's logic
     item_group = ['CONSUMER_FACING_ITEM_NAME']
     if is_nexla:
         item_group.extend(['SUGGESTED_CONCATENATED_NAME', 'Item Name Rule Issues', 'Item Name Assessment'])
@@ -308,7 +364,7 @@ def reorder_columns_for_readability(df, is_nexla):
         ['PRODUCT_GROUP', 'ProductGroupIssues?'],
         ['VARIANT', 'VariantIssues?'],
         ['ADDITIONAL_IMAGE_URLS','AuxPhotoIssues?', 'All_Aux_Photos_URLs'],
-        ['SHORT_DESCRIPTION', 'DetailsIssues?']
+        ['SHORT_DESCRIPTION', 'DESCRIPTION', 'DETAILS', 'DescriptionIssues?']
     ]
     reordered, seen = [], set()
     for group in groups:
@@ -319,7 +375,6 @@ def reorder_columns_for_readability(df, is_nexla):
     return df[reordered + [col for col in df.columns if col not in seen]]
 
 def generate_sample_csv(df, columns, n):
-    # This function remains the same as the original script's logic
     selected_cols = [col for col in columns if col in df.columns]
     sample_df = df.sample(n=min(n, len(df)))[selected_cols]
     return sample_df.to_csv(index=False).encode('utf-8')
@@ -330,9 +385,6 @@ load_css()
 # --- Sidebar UI ---
 with st.sidebar:
     st.header("⚙️ Configuration")
-    # st.subheader("AI Model Configuration")
-    # This is the updated, more secure API key input
-    # It uses st.password to hide the key and stores it in session_state
     api_key_input = st.text_input("OpenAI API Key", value=st.session_state.get("api_key", ""), type="password")
     if api_key_input:
         st.session_state.api_key = api_key_input
@@ -348,19 +400,12 @@ with st.sidebar:
         ["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"],
         index=["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"].index(st.session_state.agent_model))
         
-    # st.session_state.ai_model = st.selectbox("Select AI Model for Chat",
-    #     ["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"],
-    #     index=["gpt-5","gpt-5-chat-latest", "gpt-5-mini", "gpt-5-nano","gpt5-thinking", "gpt-4o"].index(st.session_state.ai_model))
-    
-
     st.session_state.website_url = st.text_input("Merchant Website URL", value=st.session_state.website_url)
     uploaded_file = st.file_uploader("1. Upload Merchant Data File", type=["csv", "xlsx"])
-    # The taxonomy file is now loaded locally, so no uploader is needed.
     if uploaded_file:
         st.session_state.uploaded_file_content = uploaded_file.read()
         st.session_state.uploaded_file_name = uploaded_file.name
     
-    # Load local taxonomy file
     try:
         if os.path.exists('taxonomy.json'):
             with open('taxonomy.json', 'r') as f:
@@ -373,7 +418,6 @@ with st.sidebar:
         st.error(f"Error loading local taxonomy file: {e}")
         st.session_state.taxonomy_df = None
         
-    # Load local criteria file
     try:
         with open('assessment_instructions.yaml', 'r') as f:
             st.session_state.criteria_content = f.read()
@@ -386,11 +430,11 @@ with st.sidebar:
         st.success(f"File in memory: **{st.session_state.uploaded_file_name}**")
         
     st.divider()
+    
     verticals = ['CnG', 'Alcohol', 'Office', 'Home Improvement', 'Beauty', 'Sports', 'Electronics', 'Pets', 'Party', 'Paint', 'Shoes']
     st.session_state.vertical = st.selectbox("Select Business Vertical", options=verticals,
                                              index=verticals.index(st.session_state.vertical))
     st.session_state.is_nexla = st.toggle("Nexla Enabled Merchant?", value=st.session_state.is_nexla)
-    
     
     default_guides = {
         "CnG": "[Brand] [Dietary Tag] [Variation] [Item Name] [Container] [Size & UOM]",
@@ -406,28 +450,27 @@ with st.sidebar:
     st.session_state.style_guide = st.text_area("Style Guide", value=st.session_state.style_guide, height=150)
     run_button = st.button("🚀 Run Assessment", type="primary",
                            disabled=(st.session_state.uploaded_file_content is None))
-add_footer()
+    
+    add_footer()
 
 # --- Main UI ---
 st.title("✨🚀 Merchant Data Assessment Tool")
 
-# --- Empty State / Welcome Message ---
 if not st.session_state.assessment_done and not run_button:
     st.info("👋 Welcome! Upload your data and configure the settings in the sidebar to begin.")
     st.markdown("ℹ️ Note: The assessment rules and taxonomy are now embedded in the app.")
 
-# Create a placeholder for the status message
 status_placeholder = st.empty()
 
 if run_button:
-    # --- ADDED: Reset the tracker on each new run ---
     st.session_state.api_tracker = ApiUsageTracker()
     if st.session_state.uploaded_file_content:
-        # Place the spinning gear message in the placeholder
         status_placeholder.markdown('<h3><span class="spinning-gear">⚙️</span> Running Assessment...</h3>', unsafe_allow_html=True)
         try:
-            df = load_dataframe(st.session_state.uploaded_file_content, st.session_state.uploaded_file_name)
+            df = load_and_standardize_dataframe(st.session_state.uploaded_file_content, st.session_state.uploaded_file_name)
+            
             if df is not None:
+                st.toast("DataFrame loaded and columns standardized.", icon="✅")
                 with st.spinner('Loading assessment agents...'):
                     agents = discover_agents()
                 
@@ -436,20 +479,22 @@ if run_button:
                 progress_text = st.empty()
                 run_assessment_pipeline(agents, df, st.session_state, progress_bar, progress_text)
                 status_placeholder.empty()
-                
+            else:
+                status_placeholder.empty()
+                st.error("❌ Failed to load or process the data file. Please check the file format and content.")
+
         except Exception as e:
-            status_placeholder.empty() # Clear the placeholder on failure
-            st.error(f"❌ Assessment failed: {e}")
+            status_placeholder.empty()
+            st.error(f"❌ Assessment failed with an unexpected error: {e}")
             logging.error("Assessment error", exc_info=True)
             st.exception(e)
 
-# --- Results Display (UPDATED WITH MODERN UI) ---
+# --- Results Display ---
 if st.session_state.assessment_done:
-    # st.page_link("pages/💬_2_Chat_with_Report.py", label="🧠", use_container_width=False)
+    st.page_link("pages/💬_2_Chat_with_Report.py", label="🧠", width='content')
 
     st.header("📊 Assessment Results")
     
-    # --- Top-level summary cards ---
     col1, col2 = st.columns(2)
     with col1:
         if st.session_state.final_summary:
@@ -473,13 +518,12 @@ if st.session_state.assessment_done:
     
     st.divider()
 
-    # --- Tabs for organized results ---
     tab1, tab2, tab3, tab4 = st.tabs(["📈 Summary & Chart", "📋 Detailed Report", "💾 Downloads", "🧾 Full Data"])
 
     with tab1:
         if st.session_state.summary_df is not None:
             st.subheader("🔍 Issues Summary by Attribute")
-            st.dataframe(st.session_state.summary_df, use_container_width=True)
+            st.dataframe(st.session_state.summary_df, width='stretch')
             
             st.divider()
 
@@ -487,14 +531,20 @@ if st.session_state.assessment_done:
             chart_df = st.session_state.summary_df.set_index('Attribute')
             st.bar_chart(chart_df['Issues Found'])
 
-
     with tab2:
         if st.session_state.full_report:
             st.subheader("📋 Attribute-by-Attribute AI Commentary")
             rows = []
-            # **FIX**: Added a check to ensure 'data' is a dictionary before processing
             for attr, data in st.session_state.full_report.items():
                 if isinstance(data, dict):
+                    bad_examples = data.get("bad_examples", "N/A")
+                    if isinstance(bad_examples, (list, dict)):
+                        bad_examples = json.dumps(bad_examples, indent=2)
+                    
+                    corrected_examples = data.get("corrected_examples", "N/A")
+                    if isinstance(corrected_examples, (list, dict)):
+                        corrected_examples = json.dumps(corrected_examples, indent=2)
+
                     if "error" in data:
                         rows.append({"Attribute": attr, "Assessment": "Error", "Commentary": data["error"]})
                     else:
@@ -502,25 +552,23 @@ if st.session_state.assessment_done:
                             "Attribute": attr, "Coverage": data.get("coverage", "N/A"),
                             "Duplicates": data.get("duplicates", "N/A"), "Unique Paths": str(data.get("unique_categories", "")),
                             "Assessment": data.get("assessment", "N/A"), "Commentary": data.get("commentary", "N/A"),
-                            "Improvements Needed": data.get("improvements", "N/A"), "Bad Examples": data.get("bad_examples", "N/A"),
-                            "Corrected Examples": data.get("corrected_examples", "N/A")
+                            "Improvements Needed": data.get("improvements", "N/A"),
+                            "Bad Examples": bad_examples,
+                            "Corrected Examples": corrected_examples
                         })
-            st.dataframe(pd.DataFrame(rows), use_container_width=True)
+            st.dataframe(pd.DataFrame(rows), width='stretch')
 
     with tab3:
         st.subheader("⬇️ Download Center")
         st.info("Download the full report or sample files for further analysis.")
         d_col1, d_col2, d_col3, d_col4 = st.columns(4)
         with d_col1:
-            st.download_button("⬇️ Full Detailed Report (.csv)", st.session_state.assessed_csv, "assessment_results.csv", "text/csv", use_container_width=True, type='primary')
+            st.download_button("⬇️ Full Detailed Report (.csv)", st.session_state.assessed_csv, "assessment_results.csv", "text/csv", width='stretch', type='primary')
         with d_col2:
-            st.download_button("⬇️ Name Check Sample (30 SKUs)", st.session_state.sample_30_csv, "sample_30_skus.csv", "text/csv", use_container_width=True, type='primary')
+            st.download_button("⬇️ Name Check Sample (30 SKUs)", st.session_state.sample_30_csv, "sample_30_skus.csv", "text/csv", width='stretch', type='primary')
         with d_col3:
-            st.download_button("⬇️ Image Check Sample (50 SKUs)", st.session_state.sample_50_csv, "sample_50_skus.csv", "text/csv", use_container_width=True, type='primary')
+            st.download_button("⬇️ Image Check Sample (50 SKUs)", st.session_state.sample_50_csv, "sample_50_skus.csv", "text/csv", width='stretch', type='primary')
         
-        # st.divider()
-
-        # --- ADDED: New download button for the taxonomy mapping ---
         if st.session_state.get("taxonomy_mapping_csv"):
             with d_col4:
                 st.download_button(
@@ -528,8 +576,8 @@ if st.session_state.assessment_done:
                 data=st.session_state.taxonomy_mapping_csv,
                 file_name="Taxonomy_Mapping_Assessment.csv",
                 mime="text/csv",
-                use_container_width=True,
-                type="primary" # Make it stand out
+                width='stretch',
+                type="primary"
             )
 
     with tab4:
@@ -537,15 +585,14 @@ if st.session_state.assessment_done:
         st.info("This table contains the original data with added assessment columns.")
         st.dataframe(st.session_state.assessed_df)
 
-     # --- ADDED: Display the API Usage Report ---
     st.divider()
     st.subheader("💰 API Usage & Cost Report")
     st.info("This table provides an estimate of the tokens used and the cost for this assessment session.")
     usage_df = st.session_state.api_tracker.summary()
-    st.dataframe(usage_df, use_container_width=True)
+    st.dataframe(usage_df, width='stretch')
 
     st.info("Use the Chat tab to ask AI questions about this report.")
 
+
 # call once near the end of each page:
 add_footer()
-
