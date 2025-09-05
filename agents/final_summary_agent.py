@@ -13,7 +13,7 @@ class Agent(BaseAgent):
     """
     The final agent that orchestrates the analysis, evaluates against dynamic rules,
     and uses an LLM to generate a structured, human-readable final report.
-    This version includes detailed logging for debugging purposes.
+    This version focuses the AI's summary on only the required, failed attributes.
     """
     
     _UNIVERSAL_VERTICALS = {"all", "all verticals", "any", "general", "*"}
@@ -91,7 +91,6 @@ class Agent(BaseAgent):
         df["requirement"] = df["requirement"].apply(self._standardize_requirement)
         
         df.dropna(subset=["attribute", "requirement"], inplace=True)
-        logging.debug(f"Normalized rules DataFrame head:\n{df.head().to_string()}")
         return df[df["attribute"] != ""].reset_index(drop=True)[required_cols]
 
     def _rules_for_vertical(self, rules: pd.DataFrame, vertical: Optional[str]) -> pd.DataFrame:
@@ -109,7 +108,6 @@ class Agent(BaseAgent):
         subset.drop_duplicates(subset=["attribute"], keep="first", inplace=True)
         
         logging.info(f"Found {len(subset)} applicable rules for this vertical.")
-        logging.debug(f"Applicable rules head:\n{subset.head().to_string()}")
         return subset.drop(columns=["__priority__"])
 
     def _infer_vertical(self, full_report: dict) -> Optional[str]:
@@ -123,15 +121,12 @@ class Agent(BaseAgent):
         return None
 
     def _collect_metrics_from_report(self, full_report: dict) -> Dict[str, Dict[str, Any]]:
-        """
-        **FIXED**: Collects metrics directly from the detailed full_report dictionary.
-        """
+        """Collects metrics directly from the detailed full_report dictionary."""
         logging.info("Collecting attribute metrics directly from the full_report.")
         metrics_map = {}
         for attr, data in full_report.items():
-            if isinstance(data, dict): # Ensure we only process attribute dictionaries
+            if isinstance(data, dict): 
                 try:
-                    # Parse coverage string like "100 / 101 (99.01%)"
                     coverage_str = data.get("coverage", "0 / 0")
                     coverage_count = int(coverage_str.split('/')[0].strip())
                     
@@ -143,8 +138,6 @@ class Agent(BaseAgent):
                 except (ValueError, IndexError) as e:
                     logging.warning(f"Could not parse coverage for attribute '{attr}': {e}")
                     metrics_map[self._normalize(attr).lower()] = { "coverage_count": None }
-
-        logging.debug(f"Collected metrics from full_report: {json.dumps(metrics_map, indent=2)}")
         return metrics_map
 
     # ---- Core Evaluation Logic ----
@@ -153,8 +146,7 @@ class Agent(BaseAgent):
         self,
         attr_metrics: Dict[str, Dict[str, Any]],
         rules: pd.DataFrame,
-        total_skus: int,
-        full_report: dict
+        total_skus: int
     ) -> List[Dict[str, Any]]:
         """Compares attribute metrics against rules and returns a detailed assessment for each attribute."""
         logging.info("Starting evaluation of attribute metrics against rules.")
@@ -219,15 +211,8 @@ class Agent(BaseAgent):
                     record["details"] = f"Coverage of {record['coverage_percentage_str']} meets all requirements."
 
             elif req == "Nice to Have":
-                coverage_threshold = self._parse_coverage(rule_text)
-                if coverage_threshold and coverage_rate is not None and coverage_rate < coverage_threshold:
-                    record["status"] = "Issue"
-                    record["details"] = f"Coverage {record['coverage_percentage_str']} is below the recommended {coverage_threshold:.1%}."
-                else:
-                    record["status"] = "OK"
-                    record["details"] = f"Sufficient coverage at {record['coverage_percentage_str']}."
+                record["status"] = "OK" # Default for nice-to-have
             
-            logging.debug(f"Assessment for '{attr}': {record['status']} - {record['details']}")
             assessments.append(record)
         logging.info("Finished evaluation.")
         return assessments
@@ -237,7 +222,6 @@ class Agent(BaseAgent):
     def assess(self, full_report: dict, api_key: str = None) -> dict:
         """
         Orchestrates the final assessment process.
-        **FIXED**: Takes full_report as the primary input.
         """
         logging.info("--- Starting Final Summary Agent Assessment ---")
         json_path = "sku_coverage_rules.json"
@@ -250,55 +234,59 @@ class Agent(BaseAgent):
             return {"eligibility_score": "Error", "reasons": [f"Critical error loading rules: {e}"]}
         
         total_skus = full_report.get("total_skus", 0)
-        logging.info(f"Total SKUs for assessment: {total_skus}")
-        
         vertical = self._infer_vertical(full_report) or "Unknown"
         applicable_rules = self._rules_for_vertical(rules_df, vertical)
         attr_metrics = self._collect_metrics_from_report(full_report)
 
-        all_assessments = self._evaluate_against_rules(attr_metrics, applicable_rules, total_skus, full_report)
+        all_assessments = self._evaluate_against_rules(attr_metrics, applicable_rules, total_skus)
 
-        failed_required = any(a["requirement"] == "Required" and a["status"] in ["Fail", "Unknown"] for a in all_assessments)
-        eligibility = "Not Eligible for GP" if failed_required else "Eligible for GP"
+        failed_required_assessments = any(a["requirement"] == "Required" and a["status"] in ["Fail", "Unknown"] for a in all_assessments)
+        eligibility = "Not Eligible for GP" if failed_required_assessments else "Eligible for GP"
         logging.info(f"Programmatic eligibility determined as: {eligibility}")
+
+        # --- FIX: Create a focused list of only the required failures for the AI ---
+        required_failures = [
+            assess for assess in all_assessments 
+            if assess["requirement"] == "Required" and assess["status"] == "Fail"
+        ]
 
         llm_context = {
             "vertical": vertical,
-            "total_skus": total_skus,
             "determined_eligibility": eligibility,
-            "attribute_assessments": all_assessments
+            "required_failures": required_failures # Pass only the failures to the AI
         }
         logging.info("Context prepared for LLM. Calling AI for narrative summary.")
-        logging.debug(f"LLM Context: {json.dumps(llm_context, indent=2)}")
 
         prompt = f"""
-You are a data quality consultant writing a final report. Your task is to provide a clear, narrative-style summary of the merchant's data quality issues.
+            You are a data quality consultant writing a final report. Your task is to provide a clear, scannable summary of ONLY the critical data quality issues that make a merchant ineligible.
 
-Your output MUST be a valid JSON object with this exact structure:
-- `eligibility_score`: (string) "Eligible for GP" or "Not Eligible for GP".
-- `narrative_summary`: (string) A brief, prose-style summary formatted with Markdown.
+            Your output MUST be a valid JSON object with this exact structure:
+            - `eligibility_score`: (string) "Eligible for GP" or "Not Eligible for GP".
+            - `key_reasons`: (list of strings) A Markdown-formatted bulleted list.
 
-**Analysis Context:**
-```json
-{json.dumps(llm_context, indent=2, ensure_ascii=False)}
-```
-
-**Instructions for `narrative_summary`:**
-1.  **Create a Brief List of Issues:** Use a Markdown bulleted list. For each major failed attribute:
-    * Create a bolded title (e.g., "**MSID Issues:**"). Explain the problem clearly. Use the `commentary` and `details` from the context to provide specific examples. Also include the coverage if less than the requirement.
-2.  **End with a Conclusive Summary Paragraph:** Write a final paragraph that summarizes the primary blockers for eligibility. Start with a checkmark emoji (✅ **Summary:**).
-"""
+            **Analysis Context:**
+            ```json
+            {json.dumps(llm_context, indent=2, ensure_ascii=False)}
+            
+            ```
+            **Instructions for `key_reasons`:**
+        1.  **Focus ONLY on the `required_failures` provided in the context.** Do not mention any other attributes. If the list is empty, state that all required attributes passed.
+        2.  For each failed attribute in the list, create one clear, concise bullet point.
+        3.  Start each bullet point with a relevant emoji.
+        4.  Clearly state the attribute name and the core problem. Use the `details` and `commentary` to be specific.
+        5.  Example format: "📦 **Taxonomy Path Issues:** The categorization is inconsistent. AI Commentary: 'The Taxonomy Path has missing L1/L2 categories'."
+        """
 
         ai_response = self.call_ai(prompt, api_key, self.model)
 
-        if isinstance(ai_response, dict) and "eligibility_score" in ai_response and "narrative_summary" in ai_response:
+        if isinstance(ai_response, dict) and "eligibility_score" in ai_response and "key_reasons" in ai_response:
             logging.info("Successfully received and parsed a valid response from LLM.")
-            summary = [ai_response.get("narrative_summary")]
+            reasons = ai_response.get("key_reasons", [])
             return {
                 "eligibility_score": ai_response.get("eligibility_score"),
-                "reasons": summary,
+                "reasons": reasons,
                 "final_summary": {
-                    "recommendations": summary,
+                    "recommendations": reasons,
                     "assessment_details": all_assessments
                 },
                 "vertical": vertical,
@@ -306,8 +294,8 @@ Your output MUST be a valid JSON object with this exact structure:
             }
         else:
             logging.warning("LLM response was invalid. Using deterministic fallback.")
-            failures = [f"{a['attribute']}: {a['details']}" for a in all_assessments if a["status"] == "Fail"]
-            summary = [f"Eligibility is {eligibility}."] + failures
+            failures = [f"- {a['attribute']}: {a['details']}" for a in required_failures]
+            summary = [f"**Eligibility is {eligibility}.**"] + failures
             
             return {
                 "eligibility_score": eligibility,
@@ -320,3 +308,4 @@ Your output MUST be a valid JSON object with this exact structure:
                 "vertical": vertical,
                 "rule_source": json_path,
             }
+            

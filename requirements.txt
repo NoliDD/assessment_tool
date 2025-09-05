@@ -8,6 +8,7 @@ requests
 Pillow
 numpy
 python-docx
+nest_asyncio
 # --- LangChain & LangGraph Libraries ---
 langchain
 langchain-openai

@@ -75,6 +75,10 @@ class Agent(BaseAgent):
     # ----------------------------------------------------
 
     def _get_attribute_specific_instructions(self, attr_name: str, vertical: str) -> str:
+        """
+        Provides detailed, attribute-specific instructions for the AI to improve assessment accuracy.
+        This acts as a dynamic rulebook for the LLM.
+        """
         instructions = {
             "brand": "Focus on consistency and accuracy. Is the brand name correctly populated, or is it mixed into the item name? A 'Perfect' score requires high coverage and consistent brand names. Downgrade if brands are missing where implied by the item name (e.g., 'Tostitos Chips' with an empty BRAND_NAME field).",
             "consumer_facing_item_name": "Assess for customer readability and completeness. Are names clear, or full of internal codes or repeated information (like brand/size)? 'Modifier' items needing customer choices (e.g., 'Build Your Own Pizza') are critical issues. 'Perfect' means names are clean, descriptive, and unique.",
@@ -88,8 +92,15 @@ class Agent(BaseAgent):
             "variant": f"For the '{vertical}' vertical, variants like color, flavor, or scent are essential. Assess if the provided variants are specific and relevant (e.g., 'Red' for lipstick, not 'Assorted'). 'Perfect' requires high coverage of clear, specific variant names.",
             "short_description": "Assess for quality and value. Is the description unique and informative, or generic and unhelpful? Good descriptions enhance customer experience. 'Perfect' means high coverage of unique, well-written descriptions.",
             "restricted_item_check": "This is a critical compliance check. Scan item names in the sample for products that cannot be sold (e.g., tobacco, CBD, lottery tickets, weapons). The presence of even ONE such item should result in a 'Missing or Unusable' score for this check.",
+            # --- FIX: Added instructions for new attributes ---
+            "is_weighted_item": "Assess for correctness. This boolean flag should be 'True' for items sold by weight (like produce) and 'False' otherwise. 'Perfect' requires correct assignment for all items in the sample.",
+            "average_weight_per_each": f"For the '{vertical}' vertical, this is required for weighted items. Assess if this field is populated correctly for items where IS_WEIGHTED_ITEM is True. It should be blank for non-weighted items.",
+            "plu": f"For the '{vertical}' vertical (especially CnG), assess if PLU codes are present for relevant items (like produce). Check for valid formatting (typically 4-5 digits). 'Perfect' requires high coverage on relevant items.",
+            "snap_eligible": "Assess this boolean flag for correctness. It should be 'True' for eligible grocery items. 'Perfect' means correct assignment for all items in the sample."
         }
-        return instructions.get(attr_name, "Assess this attribute for overall completeness, consistency, and accuracy based on the provided data sample.")
+        # Default instruction if no specific rule is found
+        default_instruction = "Assess this attribute for overall completeness, consistency, and accuracy based on the provided data sample."
+        return instructions.get(attr_name, default_instruction)
 
     def assess(self, df: pd.DataFrame, vertical: str = "Unknown", api_key: str = None) -> dict:
         logging.info("Running Master Reporting Agent with optimized prompt...")
@@ -100,7 +111,9 @@ class Agent(BaseAgent):
         full_report = {}
         total_skus = len(df)
         full_report['vertical'] = vertical
+        full_report['total_skus'] = int(total_skus)
 
+        # --- FIX: Added new attributes to the assessment list ---
         attributes_to_assess = [
             {"name": "msid", "data_col": "MSID", "issue_col": "MSIDIssues?"},
             {"name": "upc", "data_col": "UPC", "issue_col": "UPCIssues?"},
@@ -113,10 +126,21 @@ class Agent(BaseAgent):
             {"name": "product_group", "data_col": "PRODUCT_GROUP", "issue_col": "ProductGroupIssues?"},
             {"name": "variant", "data_col": "VARIANT", "issue_col": "VariantIssues?"},
             {"name": "short_description", "data_col": "DESCRIPTION", "issue_col": "DescriptionIssues?"},
+            {"name": "is_weighted_item", "data_col": "IS_WEIGHTED_ITEM", "issue_col": "WeightedItemIssues?"},
+            {"name": "average_weight_per_each", "data_col": "AVERAGE_WEIGHT_PER_EACH", "issue_col": "AverageWeightIssues?"},
+            {"name": "plu", "data_col": "PLU", "issue_col": "PLUIssues?"},
+            {"name": "snap_eligible", "data_col": "SNAP_ELIGIBLE", "issue_col": "SNAPEligibilityIssues?"},
             {"name": "restricted_item_check", "data_col": "CONSUMER_FACING_ITEM_NAME", "issue_col": None},
         ]
 
         for attr in attributes_to_assess:
+            # Check if the data column exists before proceeding
+            if attr['data_col'] not in df.columns:
+                logging.warning(f"Skipping attribute '{attr['name']}' because data column '{attr['data_col']}' was not found.")
+                continue
+
+            logging.info(f"Generating report for attribute: {attr['name']}...")
+
             data_col = attr['data_col']
             issue_col = attr['issue_col']
 
@@ -150,19 +174,29 @@ class Agent(BaseAgent):
             issues_sample_json = json.dumps(issues_sample, indent=2, ensure_ascii=False)
 
             # Data sample
-            sample_n = min(30, len(df))
+            sample_size = 50
+            sample_n = min(sample_size, len(df))
             data_sample_str = df.sample(n=sample_n).to_string() if sample_n > 0 else "No data to sample."
             data_sample_str = self._clean_field(data_sample_str)
 
             specific_instructions = self._get_attribute_specific_instructions(attr['name'], vertical)
 
             prompt = f"""
-            You are an expert data quality consultant with a deep understanding of e-commerce standards. Provide a precise and actionable assessment for the '{attr['name']}' attribute.
+            You are an expert data quality consultant with a deep understanding of e-commerce standards. Your task is to provide a precise and actionable assessment for the '{attr['name']}' attribute.
 
-            **Assessment Score Rubric**
-            - "Perfect": 100% coverage, few/no duplicates, consistent/standardized values.
-            - "Has Some Issues/Nuances to Accommodate": Mostly populated but with fixable issues (e.g., 80–98% coverage, inconsistent formatting).
-            - "Missing or Unusable": Low coverage (<80%), mostly empty, or fundamentally incorrect/placeholder values.
+            **Your Goal:** Evaluate the data based on the provided metrics and data sample to determine its quality and readiness for an e-commerce platform.
+
+            **Step-by-Step Analysis Guide (Think through these steps before giving your JSON response):**
+            1.  **Quantitative Review:** Look at the `coverage` and `duplicates` count. Is the coverage high? This sets the baseline. Low coverage is a major red flag.
+            2.  **Qualitative Review:** Examine the `Qualitative Data Sample`. Does the data *look* correct and consistent? Compare this with the `Pre-flagged Issues Sample`.
+            3.  **Apply Specific Instructions:** Use the rules below to guide your judgment for this specific attribute.
+            4.  **Synthesize and Score:** Combine your findings to assign an `assessment_score` based on the rubric below.
+            5.  **Summarize:** Write your `commentary` and `improvements_needed` based on your analysis. Be specific and actionable.
+
+            **Assessment Score Rubric:**
+            - **"Perfect"**: Use only if coverage is 100%, duplicates are minimal, and the data sample shows consistent, high-quality, standardized values.
+            - **"Has Some Issues/Nuances to Accommodate"**: The attribute is mostly populated but has correctable problems like inconsistent formatting, moderate coverage (80-98%), or some inaccuracies. The data is usable but requires cleanup.
+            - **"Missing or Unusable"**: Coverage is low (<80%), the attribute is mostly empty, or the data shows critical errors, placeholder text, or is fundamentally incorrect. The data requires significant intervention.
 
             ---
             **1) Quantitative Metrics**

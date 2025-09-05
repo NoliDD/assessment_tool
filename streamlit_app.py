@@ -129,7 +129,7 @@ def load_css():
 
 # --- Initialize Session State ---
 default_session_state = {
-    "api_key": "", "api_key_validated": False, "ai_model": "gpt-4o",
+    "api_key": "", "api_key_validated": False, "ai_model": "gpt-5-chat-latest",
     "website_url": "", "uploaded_file_content": None, "uploaded_file_name": "",
     "taxonomy_df": None, "criteria_content": None, "vertical": "CnG",
     "is_nexla": False, "style_guide": "", "last_vertical": "",
@@ -314,9 +314,9 @@ def run_assessment_pipeline(agents, df, session, progress_bar, progress_text):
     if final_summary_agent and session.api_key_validated:
         st.session_state.final_summary = final_summary_agent.assess(st.session_state.full_report, api_key=session.api_key)
             
-    step += 1
-    progress_text.info(f"Step {step}/{total_steps}: Preparing final report for display...")
-    progress_bar.progress(min(1.0, step / total_steps))
+        step += 1
+        progress_text.info(f"Step {step}/{total_steps}: Preparing final report for display...")
+        progress_bar.progress(min(1.0, step / total_steps))
     
     # --- **FIX**: New, more robust final cleanup function for display ---
     logging.info("Performing final cleanup of the assessed DataFrame for display.")
@@ -325,16 +325,20 @@ def run_assessment_pipeline(agents, df, session, progress_bar, progress_text):
     # Convert boolean columns to clean True/False strings for display
     for flag_col in boolean_flags:
         if flag_col in display_df.columns:
+            # Map 1.0 to 'True', 0.0 to 'False', and everything else (NaN) to an empty string
             display_df[flag_col] = display_df[flag_col].apply(lambda x: 'True' if x == 1.0 else ('False' if x == 0.0 else ''))
 
     # Convert all other columns to string type to prevent mixed-type errors
     for col in display_df.columns:
         if col not in boolean_flags:
-             # Fill NaNs before converting to string to avoid issues
+             # Fill NaNs before converting to string, and remove trailing '.0' from numbers
              display_df[col] = display_df[col].fillna('').astype(str).replace(r'\.0$', '', regex=True)
 
-    # Final sweep for any 'nan' strings that might have been created
-    display_df.replace('nan', '', regex=True, inplace=True)
+    # --- FIX: Use a more robust, column-specific method for case-insensitive 'nan' replacement ---
+    for col in display_df.select_dtypes(include=['object']).columns:
+        # Use str.replace with case=False, which is the correct method for Series objects
+        display_df[col] = display_df[col].str.replace('nan', '', case=False, regex=True)
+        
     display_df = reorder_columns_for_readability(display_df, session.is_nexla)
     st.session_state.assessed_df = display_df
     # --- End of New Cleanup Step ---
@@ -411,7 +415,8 @@ with st.sidebar:
             with open('taxonomy.json', 'r') as f:
                 taxonomy_data = json.load(f)
                 st.session_state.taxonomy_df = pd.DataFrame(taxonomy_data['taxonomy'])
-            st.success("Taxonomy Loaded")
+            # st.success("Taxonomy Loaded")
+                logging.info(f"Taxonomy Loaded")
         else:
             st.warning("No local 'taxonomy.json' found. Taxonomy-based agents will be limited.")
     except Exception as e:
@@ -421,7 +426,9 @@ with st.sidebar:
     try:
         with open('assessment_instructions.yaml', 'r') as f:
             st.session_state.criteria_content = f.read()
-        st.success("Assessment Criteria Loaded")
+        # st.success("Assessment Criteria Loaded")
+            logging.info(f'Assessment Criteria Loaded')
+            
     except FileNotFoundError:
         st.warning("No local 'assessment_instructions.yaml' found. The chatbot will have limited knowledge of specific rules.")
         st.session_state.criteria_content = None
@@ -565,9 +572,9 @@ if st.session_state.assessment_done:
         with d_col1:
             st.download_button("⬇️ Full Detailed Report (.csv)", st.session_state.assessed_csv, "assessment_results.csv", "text/csv", width='stretch', type='primary')
         with d_col2:
-            st.download_button("⬇️ Name Check Sample (30 SKUs)", st.session_state.sample_30_csv, "sample_30_skus.csv", "text/csv", width='stretch', type='primary')
+            st.download_button("⬇️ Name Check Sample (30 SKUs)", st.session_state.sample_30_csv, "name_check_sample_30_skus.csv", "text/csv", width='stretch', type='primary')
         with d_col3:
-            st.download_button("⬇️ Image Check Sample (50 SKUs)", st.session_state.sample_50_csv, "sample_50_skus.csv", "text/csv", width='stretch', type='primary')
+            st.download_button("⬇️ Image Check Sample (50 SKUs)", st.session_state.sample_50_csv, "image_check_sample_50_skus.csv", "text/csv", width='stretch', type='primary')
         
         if st.session_state.get("taxonomy_mapping_csv"):
             with d_col4:

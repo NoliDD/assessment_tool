@@ -1,11 +1,12 @@
 {
   "name": "data-assessment-tool",
+  "productName": "Data Assessment Tool",
   "version": "1.0.0",
   "description": "A desktop app for assessing data quality using Streamlit.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --mac --win --linux"
+    "build": "electron-builder --mac --win nsis --linux"
   },
   "keywords": [
     "electron",
@@ -24,7 +25,8 @@
   "build": {
     "appId": "com.example.dataassessmenttool",
     "files": [
-      "main.js"               
+      "main.js",
+      "package.json"               
     ],
     "extraResources": [
       { "from": ".streamlit", "to": ".streamlit" },
@@ -39,11 +41,18 @@
       { "from": "utils.py", "to": "utils.py" },
       { "from": "agents", "to": "agents" },
       { "from": "pages", "to": "pages" },
-
       { "from": "venv", "to": "venv" }
     ],
+    
     "asarUnpack": ["**/venv/**"],
-    "mac": { "icon": "build/icon.icns" },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "icon": "build/icon.icns"
+    },
     "win": { "icon": "build/icon.ico" },
     "icon": "build/icon.png"
   }

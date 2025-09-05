@@ -29,25 +29,18 @@ function existsX(p) {
 }
 
 function resolvePython() {
-  // Prefer embedded venv (packaged), then dev venv, then system python
-  const candidates = process.platform === 'win32'
-    ? [
-        resourcesPath('venv', 'Scripts', 'python.exe'),
-        path.join(process.cwd(), 'venv', 'Scripts', 'python.exe'),
-        'python', 'python3'
-      ]
-    : [
-        resourcesPath('venv', 'bin', 'python'),
-        path.join(process.cwd(), 'venv', 'bin', 'python'),
-        '/opt/homebrew/bin/python3', '/usr/local/bin/python3', '/usr/bin/python3',
-        'python3', 'python'
-      ];
-  for (const c of candidates) {
-    if (c.includes(path.sep)) { if (existsX(c)) return c; }
-    else { return c; } // rely on PATH
+  if (process.platform === 'win32') {
+    const embedded = resourcesPath('venv', 'Scripts', 'python.exe');
+    if (fs.existsSync(embedded)) return embedded;
+    return 'python';
+  } else {
+    const embedded = resourcesPath('venv', 'bin', 'python3');
+    if (fs.existsSync(embedded)) return embedded;
+    return 'python3';
   }
-  return 'python3';
 }
+
+
 
 function waitForHttp(url, timeoutMs = 60000) {
   const deadline = Date.now() + timeoutMs;
