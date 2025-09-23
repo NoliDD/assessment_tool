@@ -96,9 +96,10 @@ async function createWindow() {
   const rules  = resourcesPath('sku_coverage_rules.json');
   const taxonomy = resourcesPath('taxonomy.json');
 
-  // Basic presence checks
-  if (!fs.existsSync(appPy)) {
-    dialog.showErrorBox('Missing file', `app_entry.py not found at:\n${appPy}`);
+  // Basic presence checks – allow either compiled binary or Python script
+  const compiledEntry = resourcesPath('app_entry');
+  if (!fs.existsSync(appPy) && !fs.existsSync(compiledEntry)) {
+    dialog.showErrorBox('Missing entry', `Could not find a launcher:\n- ${appPy}\n- ${compiledEntry}`);
     return;
   }
   console.log('isPackaged:', app.isPackaged);
@@ -138,25 +139,22 @@ async function createWindow() {
     PATH: `${process.env.PATH || ''}:/usr/local/bin:/opt/homebrew/bin:/usr/bin`,
   };
 
-  // Start Streamlit, using RES_BASE as the working directory
-  // pyProc = spawn(python, [
-  //   '-m', 'streamlit', 'run', appPy,
-  //   '--server.port', String(PORT),
-  //   '--server.headless', 'true',
-  //   '--server.address', '127.0.0.1' // restrict to localhost
-  // ], { env, cwd: RES_BASE });
+  // Start Streamlit using app_entry (compiled) if present; otherwise use Python + app_entry.py
+  let cmd, args;
+  if (fs.existsSync(compiledEntry) && existsX(compiledEntry)) {
+    cmd = compiledEntry;
+    args = [];
+  } else {
+    cmd = resolvePython();
+    args = [appPy];
+  }
 
-  const binary = resourcesPath('app_entry');
+  const childEnv = {
+    ...env,
+    STREAMLIT_SERVER_PORT: String(PORT),
+  };
 
-  pyProc = spawn(binary, [], {
-    env: {
-      ...process.env,
-      STREAMLIT_SERVER_PORT: String(PORT),   // if you want to pass config
-     BROWSER: "none",
-    },
-    cwd: RES_BASE
-});
-
+  pyProc = spawn(cmd, args, { env: childEnv, cwd: RES_BASE });
 
   pyProc.stdout.on('data', d => console.log('[py]', String(d)));
   pyProc.stderr.on('data', d => console.error('[py]', String(d)));

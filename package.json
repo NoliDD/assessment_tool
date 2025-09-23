@@ -6,7 +6,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --mac --win nsis --linux"
+    "build": "electron-builder --mac --win nsis --linux",
+    "build:mac-arm64-min": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --arm64 -c.mac.identity=null"
   },
   "keywords": [
     "electron",
@@ -27,8 +28,10 @@
   "build": {
     "appId": "com.example.dataassessmenttool",
     "files": [
+      "!**/*",
       "main.js",
-      "package.json"
+      "package.json",
+      "node_modules/electron-is-dev/**"
     ],
     "extraResources": [
       {
@@ -81,7 +84,18 @@
       },
       {
         "from": "venv",
-        "to": "venv"
+        "to": "venv",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!**/*.pyo",
+          "!**/pip/**",
+          "!**/setuptools/**",
+          "!**/wheel/**",
+          "!**/test*/**",
+          "!**/tests/**"
+        ]
       }
     ],
     "mac": {
@@ -90,10 +104,12 @@
         "zip"
       ],
       "category": "public.app-category.productivity",
-      "hardenedRuntime": true,
+      "hardenedRuntime": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "icon": "build/icon.icns"
+      "icon": "build/icon.icns",
+      "identity": null,
+      "gatekeeperAssess": false
     },
     "win": {
       "icon": "build/icon.ico"
