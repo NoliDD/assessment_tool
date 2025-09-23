@@ -139,12 +139,24 @@ async function createWindow() {
   };
 
   // Start Streamlit, using RES_BASE as the working directory
-  pyProc = spawn(python, [
-    '-m', 'streamlit', 'run', appPy,
-    '--server.port', String(PORT),
-    '--server.headless', 'true',
-    '--server.address', '127.0.0.1' // restrict to localhost
-  ], { env, cwd: RES_BASE });
+  // pyProc = spawn(python, [
+  //   '-m', 'streamlit', 'run', appPy,
+  //   '--server.port', String(PORT),
+  //   '--server.headless', 'true',
+  //   '--server.address', '127.0.0.1' // restrict to localhost
+  // ], { env, cwd: RES_BASE });
+
+  const binary = resourcesPath('app_entry');
+
+  pyProc = spawn(binary, [], {
+    env: {
+      ...process.env,
+      STREAMLIT_SERVER_PORT: String(PORT),   // if you want to pass config
+     BROWSER: "none",
+    },
+    cwd: RES_BASE
+});
+
 
   pyProc.stdout.on('data', d => console.log('[py]', String(d)));
   pyProc.stderr.on('data', d => console.error('[py]', String(d)));

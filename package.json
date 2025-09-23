@@ -15,9 +15,11 @@
   ],
   "author": "Nitesh Oli",
   "devDependencies": {
+    "@types/google-apps-script": "^2.0.2",
     "electron": "^28.2.1",
     "electron-builder": "^24.9.1",
-    "electron-is-dev": "^2.0.0"
+    "electron-is-dev": "^2.0.0",
+    "typescript": "^5.9.2"
   },
   "dependencies": {
     "electron-is-dev": "^2.0.0"
@@ -26,36 +28,76 @@
     "appId": "com.example.dataassessmenttool",
     "files": [
       "main.js",
-      "package.json"               
+      "package.json"
     ],
     "extraResources": [
-      { "from": ".streamlit", "to": ".streamlit" },
-      { "from": "ui.py", "to": "ui.py" },
-      {"from": "app_entry.py", "to": "app_entry.py" },
-      { "from": "streamlit_app.py", "to": "streamlit_app.py" },
-      { "from": "launch_app.py", "to": "launch_app.py" },
-      { "from": "sku_coverage_rules.json", "to": "sku_coverage_rules.json" },
-      { "from": "taxonomy.json", "to": "taxonomy.json" },
-      { "from": "assessment_instructions.yaml", "to": "assessment_instructions.yaml" },
-      { "from": "restricted_items.yaml", "to": "restricted_items.yaml" },
-      { "from": "utils.py", "to": "utils.py" },
-      { "from": "agents", "to": "agents" },
-      { "from": "pages", "to": "pages" },
-      { "from": "venv", "to": "venv" }
+      {
+        "from": ".streamlit",
+        "to": ".streamlit"
+      },
+      {
+        "from": "ui.py",
+        "to": "ui.py"
+      },
+      {
+        "from": "app_entry.py",
+        "to": "app_entry.py"
+      },
+      {
+        "from": "streamlit_app.py",
+        "to": "streamlit_app.py"
+      },
+      {
+        "from": "launch_app.py",
+        "to": "launch_app.py"
+      },
+      {
+        "from": "sku_coverage_rules.json",
+        "to": "sku_coverage_rules.json"
+      },
+      {
+        "from": "taxonomy.json",
+        "to": "taxonomy.json"
+      },
+      {
+        "from": "assessment_instructions.yaml",
+        "to": "assessment_instructions.yaml"
+      },
+      {
+        "from": "restricted_items.yaml",
+        "to": "restricted_items.yaml"
+      },
+      {
+        "from": "utils.py",
+        "to": "utils.py"
+      },
+      {
+        "from": "agents",
+        "to": "agents"
+      },
+      {
+        "from": "pages",
+        "to": "pages"
+      },
+      {
+        "from": "venv",
+        "to": "venv"
+      }
     ],
-    
-    "asarUnpack": ["**/venv/**"],
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "category": "public.app-category.productivity",
       "hardenedRuntime": true,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "icon": "build/icon.icns"
     },
-    "win": { "icon": "build/icon.ico" },
+    "win": {
+      "icon": "build/icon.ico"
+    },
     "icon": "build/icon.png"
   }
 }
-
-
