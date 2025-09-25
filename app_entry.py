@@ -46,7 +46,7 @@ def _run_streamlit(script_path: Path, port: int) -> None:
 
 def main() -> None:
     base_dir = Path(__file__).resolve().parent
-    script_path = base_dir / "streamlit_app.py"
+    script_path = base_dir / "launcher.py"
     if not script_path.exists():
         sys.stderr.write(f"ERROR: Streamlit app not found: {script_path}\n")
         sys.exit(2)

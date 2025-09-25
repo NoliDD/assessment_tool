@@ -1,9 +1,11 @@
+# Node / Electron / Tauri
 node_modules/
 dist/
 .env
 *.log
 .DS_Store
 .vscode/
+src-tauri/target/
 
 __pycache__/
 *.pyc
@@ -26,9 +28,13 @@ Thumbs.db
 .vscode/
 
 # Python virtual environment
+python/
 venv/
 *.pyc
 __pycache__/
+*.py[cod]
+*.pyo
+*.log
 
 # Streamlit secrets and config
 .streamlit/secrets.toml
@@ -37,3 +43,16 @@ __pycache__/
 .idea/
 .vscode/
 .DS_Store
+
+# Runtime inputs & offline wheels
+runtime/*.tar*
+runtime/*.tgz
+runtime/*.tar.zst
+runtime/python.tar.*
+runtime/wheelhouse/
+
+# Package managers
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

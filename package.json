@@ -6,14 +6,11 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "prep:runtime": "bash scripts/prep_runtime.sh",
     "build": "electron-builder --mac --win nsis --linux",
-    "build:mac-arm64-min": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --arm64 -c.mac.identity=null"
+    "build:mac-arm64-min": "npm run prep:runtime && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --arm64 -c.mac.identity=null"
   },
-  "keywords": [
-    "electron",
-    "streamlit",
-    "python"
-  ],
+  "keywords": ["electron", "streamlit", "python"],
   "author": "Nitesh Oli",
   "devDependencies": {
     "@types/google-apps-script": "^2.0.2",
@@ -27,61 +24,29 @@
   },
   "build": {
     "appId": "com.example.dataassessmenttool",
+    "artifactName": "${productName}-${version}-${arch}-mac.${ext}",
     "files": [
       "!**/*",
       "main.js",
       "package.json",
       "node_modules/electron-is-dev/**"
     ],
-    "extraResources": [
-      {
-        "from": ".streamlit",
-        "to": ".streamlit"
-      },
-      {
-        "from": "ui.py",
-        "to": "ui.py"
-      },
-      {
-        "from": "app_entry.py",
-        "to": "app_entry.py"
-      },
-      {
-        "from": "streamlit_app.py",
-        "to": "streamlit_app.py"
-      },
-      {
-        "from": "launch_app.py",
-        "to": "launch_app.py"
-      },
-      {
-        "from": "sku_coverage_rules.json",
-        "to": "sku_coverage_rules.json"
-      },
-      {
-        "from": "taxonomy.json",
-        "to": "taxonomy.json"
-      },
-      {
-        "from": "assessment_instructions.yaml",
-        "to": "assessment_instructions.yaml"
-      },
-      {
-        "from": "restricted_items.yaml",
-        "to": "restricted_items.yaml"
-      },
-      {
-        "from": "utils.py",
-        "to": "utils.py"
-      },
-      {
-        "from": "agents",
-        "to": "agents"
-      },
-      {
-        "from": "pages",
-        "to": "pages"
-      },
+    "extraResources": [      
+      { "from": ".streamlit", "to": ".streamlit" },
+      { "from": "launcher.py", "to": "launcher.py" },
+      { "from": "ui.py", "to": "ui.py" },
+      { "from": "app_entry.py", "to": "app_entry.py" },
+      { "from": "streamlit_app.py", "to": "streamlit_app.py" },
+      { "from": "launch_app.py", "to": "launch_app.py" },
+      { "from": "sku_coverage_rules.json", "to": "sku_coverage_rules.json" },
+      { "from": "taxonomy.json", "to": "taxonomy.json" },
+      { "from": "assessment_instructions.yaml", "to": "assessment_instructions.yaml" },
+      { "from": "restricted_items.yaml", "to": "restricted_items.yaml" },
+      { "from": "utils.py", "to": "utils.py" },
+      { "from": "agents", "to": "agents" },
+      { "from": "pages", "to": "pages" },
+      
+      { "from": "python", "to": "python" },
       {
         "from": "venv",
         "to": "venv",
@@ -90,30 +55,22 @@
           "!**/__pycache__/**",
           "!**/*.pyc",
           "!**/*.pyo",
+          "!**/test*/**",
+          "!**/tests/**",
           "!**/pip/**",
           "!**/setuptools/**",
-          "!**/wheel/**",
-          "!**/test*/**",
-          "!**/tests/**"
+          "!**/wheel/**"
         ]
       }
     ],
     "mac": {
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "category": "public.app-category.productivity",
+      "target": ["dmg", "zip"],
       "hardenedRuntime": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist",
       "icon": "build/icon.icns",
       "identity": null,
       "gatekeeperAssess": false
     },
-    "win": {
-      "icon": "build/icon.ico"
-    },
+    "win": { "icon": "build/icon.ico" },
     "icon": "build/icon.png"
   }
 }
