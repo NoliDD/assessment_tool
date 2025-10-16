@@ -319,3 +319,173 @@ If you run into issues:
 ---
 
 **Happy shipping!** ✨
+
+
+
+
+# New Added
+
+# Build & Ship – Data Assessment Tool
+
+This guide covers **exact steps** to package and ship the macOS app with an **embedded CPython runtime** and **venv**. No system Python required on the user’s Mac.
+
+> Shipping target: **macOS (arm64/Apple Silicon)**. Two build options are shown: **Electron (current)** and **Tauri v2 (optional)**.
+
+---
+
+## TL;DR
+
+```bash
+# 1) Prepare embedded Python (first time + whenever deps change)
+chmod +x scripts/prep_runtime.sh
+scripts/prep_runtime.sh
+
+# 2) Build the app (Electron)
+npm run build:mac-arm64-min
+# or: Tauri v2
+# npm run build
+
+# 3) Install, clear quarantine, validate, open
+./install_data_assessment_tool.sh \
+  --adhoc --validate --open
+```
+
+---
+
+## Prerequisites
+
+* **macOS**: Ventura+ on Apple Silicon (arm64)
+* **Node**: v18+ (LTS)
+* **npm**: v9+
+* **CPython “install_only”** tarball for `aarch64-apple-darwin` (3.10 or 3.12)
+* **zstd** if your archive is `.tar.zst`: `brew install zstd`
+* *(Optional)* **UV** for faster offline wheel downloads: `brew install uv`
+
+---
+
+## 1) Prepare the Embedded Python Runtime (required)
+
+1. **Place CPython install_only archive** in `runtime/` and name it `python.tar.gz`
+   (or set `RUNTIME_TGZ` to the exact filename).
+2. Run the prep script:
+
+   ```bash
+   chmod +x scripts/prep_runtime.sh
+   scripts/prep_runtime.sh
+   ```
+
+   What it does:
+
+   * Unpacks CPython into `./python/`
+   * Creates `./venv/` and copies `libpython3.X.dylib` into `venv/lib` (fixes macOS `dyld`)
+   * Seeds `pip` (via `ensurepip` or `runtime/wheelhouse`)
+   * Installs `requirements.txt` (offline if wheelhouse present)
+   * Sanity import test (`numpy, aiohttp, faiss, streamlit, httpx`)
+   * Prunes caches
+
+**Expected output**
+
+```
+Runtime ready
+  - Python prefix: python
+  - Venv         : venv (dyld fix applied)
+  - Import test  : PASS
+```
+
+*(Optional)* Offline wheelhouse:
+
+```bash
+mkdir -p runtime/wheelhouse
+uv pip download -r requirements.txt --only-binary=:all: -d runtime/wheelhouse
+# or: python3 -m pip download -r requirements.txt --only-binary=:all: -d runtime/wheelhouse
+```
+
+---
+
+## 2) Build the App
+
+### A) Electron (current)
+
+```bash
+npm ci
+npm run build:mac-arm64-min
+```
+
+Artifacts:
+
+* App: `dist/mac-arm64/Data Assessment Tool.app`
+* Zip: `dist/Data Assessment Tool-<version>-arm64-mac.zip`
+
+> If you ever see a 7‑Zip `E_INVALIDARG`, ensure `artifactName` in `package.json` includes `.${ext}`.
+> Alternative zip:
+> `ditto -c -k --keepParent "dist/mac-arm64/Data Assessment Tool.app" "dist/Data Assessment Tool-<version>-arm64-mac.zip"`
+
+### B) Tauri v2 (optional path)
+
+```bash
+npm ci
+npm run build
+```
+
+Artifacts:
+
+* `src-tauri/target/release/bundle/macos/*.app|*.dmg`
+
+---
+
+## 3) Install & Validate (on any Mac)
+
+Use the installer script to place the app, clear quarantine, optionally ad‑hoc sign, and validate imports using **embedded** Python.
+
+```bash
+./install_data_assessment_tool.sh \
+  --zip "dist/Data Assessment Tool-<version>-arm64-mac.zip" \
+  --adhoc --validate --open
+```
+
+The script:
+
+* Installs to `/Applications` (falls back to `~/Applications` if needed)
+* Removes quarantine (`xattr -dr`)
+* *(Optional)* Ad‑hoc signs (`codesign -s -`)
+* Validates with the right env:
+  `PYTHONHOME = <App>/Contents/Resources/python`
+  `PYTHONPATH` includes stdlib + `lib-dynload` + your modules
+  `DYLD_LIBRARY_PATH = <App>/Contents/Resources/venv/lib` (for `venv/bin/python`)
+* Logs to `~/Downloads/DataAssessmentTool_install_<timestamp>.log`
+
+**Manual verification** (after install):
+
+```bash
+APP="/Applications/Data Assessment Tool.app"
+ls -l "$APP/Contents/Resources/venv/lib/libpython3."*
+"$APP/Contents/Resources/venv/bin/python" -V
+"$APP/Contents/Resources/venv/bin/python" - <<'PY'
+import streamlit, sys; print('OK streamlit', streamlit.__version__, '| Python', sys.version)
+PY
+```
+
+---
+
+## Troubleshooting (quick)
+
+| Symptom                                 | Likely Cause                                  | Fix                                                                                                  |
+| --------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Gatekeeper block / “app is damaged”** | Unsigned build + quarantine                   | Right‑click → **Open**; or `xattr -dr com.apple.quarantine "/Applications/Data Assessment Tool.app"` |
+| ``                                      | venv can’t find libpython                     | Ensure `Contents/Resources/venv/lib/libpython3.X.dylib` exists (prep script copies it).              |
+| ``                                      | Missing `PYTHONHOME/PYTHONPATH` in validation | Use the installer’s validation (it sets them), or export those vars manually before running python.  |
+| **7‑Zip **``                            | Missing `.${ext}` in artifactName             | Fix `package.json` or zip with `ditto`.                                                              |
+| **Wrong app installed**                 | Old ZIP auto‑selected / different install dir | Pass exact `--zip` path; check log for chosen app; verify `/Applications` vs `~/Applications`.       |
+
+---
+
+## Release Checklist
+
+*
+
+---
+
+## Notes
+
+* Do **not** commit `python/`, `venv/`, or `runtime/python.tar.*` to git. Keep requirements and scripts; build runtime during CI or on packager’s machine.
+* For smoother end‑user UX, consider signing/notarizing later (Developer ID + hardened runtime).
