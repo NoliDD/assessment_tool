@@ -49,7 +49,7 @@ __pycache__/
 runtime/*.tar*
 runtime/*.tgz
 runtime/*.tar.zst
-runtime/python.tar.*
+# runtime/python.tar.*
 runtime/wheelhouse/
 
 # Package managers
