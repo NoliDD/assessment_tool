@@ -1,18 +1,77 @@
 restrictions:
-  - Tobacco/Vape products, E-cigarettes, Nicotine Pouches (unless merchant has addendum)
-  - Products containing HHC or Kratom
-  - Medicine with PSE (Pseudoephedrine)
-  - Tips/Donations, Lottery Tickets
-  - Weapons (pepper spray, ammo, etc.)
-  - Airsoft Guns, Live Animals (excl. feeder insects)
-  - Fireworks, Narcan/Naloxone sprays
-  - Male Enhancement pills
-  - Hemp/Cannabis: Delta-8/10, THC, vapes, etc.
-  - Bicycles, Framed Pools, Kegs, Propane Tank Refills
-  - Subscription Items, Happy Hour Menus, Dine-In Only
-  - DEX/Paracetamol (>16 tablets), MLM products
-  - Extra Large Items (>60 lbs or >60 in)
-  - Magazines/Newspapers, Dry Ice, Prepaid Phones
-  - Rental Items (e.g. RedBox), Deposit Items (e.g. checks)
-  - Coupons, Self-Serve Pet Vaccines, Water Refills
-  - Gift Cards (unless part of pilot)
+  # ---------- Absolute prohibitions (always exclude) ----------
+  - name: Weapons
+    keywords: ["weapon", "pepper spray", "ammo", "ammunition", "bullet", "gun", "firearm", "knife", "machete", "taser", "stun gun"]
+    absolute: true
+
+  - name: Airsoft / Live Animals
+    keywords: ["airsoft gun", "airsoft", "live animal", "live animals", "feeder insects"]
+    absolute: true
+
+  - name: Fireworks
+    keywords: ["firework", "fireworks", "roman candle", "sparkler"]
+    absolute: true
+
+  - name: Lottery / Tips / Donations / Coupons
+    keywords: ["lottery", "scratch-off", "scratch off", "tip", "donation", "coupon"]
+    absolute: true
+
+  - name: Gift Cards (unless pilot)
+    keywords: ["gift card", "giftcard", "prepaid card", "e-gift"]
+    absolute: true
+
+  - name: Subscriptions / Happy Hour / Dine-In
+    keywords: ["subscription", "subscribe", "happy hour", "dine-in only", "dine in only"]
+    absolute: true
+
+  - name: HHC / Kratom
+    keywords: ["hhc", "hexahydrocannabinol", "kratom", "mitragyna"]
+    absolute: true
+
+  - name: Male Enhancement Pills
+    keywords: ["male enhancement", "rhino pill", "libido booster"]
+    absolute: true
+
+  - name: Narcan / Naloxone
+    keywords: ["narcan", "naloxone"]
+    absolute: true
+
+  - name: Large / Hazardous Non-food
+    keywords: ["propane tank refill", "propane refill", "framed pool", "keg", "bicycle", "bike"]
+    absolute: true
+
+  - name: Magazines / Newspapers / Dry Ice / Prepaid Phones
+    keywords: ["magazine", "newspaper", "dry ice", "prepaid phone", "pre-paid phone"]
+    absolute: true
+
+  - name: Rentals / Deposits
+    keywords: ["rental", "redbox", "deposit item", "check deposit", "check cashing"]
+    absolute: true
+
+  - name: Self-Serve Pet Vaccines / Water Refills
+    keywords: ["self-serve vaccine", "pet vaccine", "water refill", "refill station"]
+    absolute: true
+
+  # ---------- Restricted but allowed with proper flags ----------
+  # If your catalog uses different column names, change the flag_column values below.
+
+  - name: Tobacco / Vape / Nicotine
+    keywords: ["tobacco", "nicotine", "vape", "e-cigarette", "ecig", "e cig", "nicotine pouch", "zynn", "zynn pouch", "lozenge"]
+    flag_column: IS_NICOTINE
+    absolute: false
+
+  - name: Hemp / Cannabis (CBD/THC/Delta-8/Delta-10)
+    keywords: ["cbd", "thc", "delta-8", "delta 8", "delta-10", "delta 10", "hemp", "cannabis"]
+    flag_column: IS_CBD
+    absolute: false
+
+  - name: Alcohol
+    keywords: ["alcohol", "beer", "wine", "whiskey", "bourbon", "vodka", "rum", "gin", "tequila", "liqueur", "cider"]
+    flag_column: IS_ALCOHOL
+    absolute: false
+
+  - name: OTC Medicines (PSE/DEX/Acetaminophen)
+    # PSE = pseudoephedrine; DEX = dextromethorphan; include common OTC terms
+    keywords: ["pseudoephedrine", "pse", "dextromethorphan", "dex", "acetaminophen", "paracetamol", "guaifenesin", "cold medicine", "cough syrup", "antihistamine"]
+    flag_column: IS_OTC_MED
+    absolute: false
