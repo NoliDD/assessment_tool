@@ -438,7 +438,7 @@ with st.sidebar:
         
     st.divider()
     
-    verticals = ['CnG', 'Alcohol', 'Office', 'Home Improvement', 'Beauty', 'Sports', 'Electronics', 'Pets', 'Party', 'Paint', 'Shoes']
+    verticals = ['CnG', 'Alcohol', 'Office', 'Home Improvement', 'Beauty', 'Sports', 'Electronics', 'Pets', 'Party', 'Halloween', 'Home', 'Outdoor']
     st.session_state.vertical = st.selectbox("Select Business Vertical", options=verticals,
                                              index=verticals.index(st.session_state.vertical))
     st.session_state.is_nexla = st.toggle("Nexla Enabled Merchant?", value=st.session_state.is_nexla)
@@ -446,10 +446,17 @@ with st.sidebar:
     default_guides = {
         "CnG": "[Brand] [Dietary Tag] [Variation] [Item Name] [Container] [Size & UOM]",
         "Alcohol": "[Brand] [Dietary Tag] [Flavor] [Variation] [Size] [Color] [Age] [Item Name] [Container] [Appellation Location] [Vintage Year] [Size & UOM]",
+        "Office": "[Brand] [Variation] [Size] [Color] [Item Name] [Product Key]",
         "Home Improvement": "[Brand] [Material/Fabric] [Power] [Variation] [Size] [Color] [Scent] [Item Name] [with Accessories]",
         "Beauty": "[Brand] [Item Name] [Product Type] [Variation] [Size] [Scent] [Color][Size & UOM]",
+        "Sports": "[Brand] [Age (specific to infant clothing)] [Gender] [Collection/Sub Brand] [Quantity if more than 1, e.g., '2 Pack' or '2 Piece'] [Style] [Color] [Fabric] [Item Name]",
+        "Electronics": "[Brand] [Variant 1] [Variant 2] [Size] [Color] [Item Name] [with Additional Detail] ['(Open Box)']",
+        "Pets": "[Brand] [Item Name] [Variation] [Dietary Tag] [Flavor] [Size] [Color] [Pet/Animal Type] [Container]",
+        "Party": "[Brand/exclude if parent brand] [Variation] [Size] [Color] [Item Name]",
+        "Halloween": "[Brand] [Item Name] [Size] [Quantity]",
+        "Home": "[Brand] [Material/Fabric] [Variation] [Size] [Color] [Scent] [Room] [Item Name]",
         "Produce": "[Brand] [Variety] [Item Name] [Container] [Size & UOM]",
-        "Other": "[Brand] [Item Name] [Size & UOM]"
+        "Outdoor": "[Brand] [Gender/Age] [Variation] [Color] [Size] [Sport/Activity] [Item Name] [Clothing Size]"
     }
     if st.session_state.style_guide == "" or st.session_state.last_vertical != st.session_state.vertical:
         st.session_state.style_guide = default_guides.get(st.session_state.vertical, "")
