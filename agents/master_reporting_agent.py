@@ -131,6 +131,7 @@ class Agent(BaseAgent):
             {"name": "plu", "data_col": "PLU", "issue_col": "PLUIssues?"},
             {"name": "snap_eligible", "data_col": "SNAP_ELIGIBLE", "issue_col": "SNAPEligibilityIssues?"},
             {"name": "restricted_item_check", "data_col": "CONSUMER_FACING_ITEM_NAME", "issue_col": None},
+            {"name": "additional_image_urls", "data_col": "ADDITIONAL_IMAGE_URLS", "issue_col": "AuxPhotoIssues?"},
         ]
 
         for attr in attributes_to_assess:

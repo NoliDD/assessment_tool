@@ -363,7 +363,7 @@ def reorder_columns_for_readability(df, is_nexla):
         ['SIZE', 'SizeIssues?'], ['UNIT_OF_MEASUREMENT', 'UNIT_OF_MEASUREMENTIssues?'],
         ['L1_CATEGORY', 'L2_CATEGORY', 'L3_CATEGORY', 'L4_CATEGORY', 'Taxonomy Path', 'CategoryIssues?'],
         ['IS_WEIGHTED_ITEM', 'WeightedItemIssues?', 'AVERAGE_WEIGHT_PER_EACH', 'AverageWeightIssues?', 'AVERAGE_WEIGHT_UOM'], ['PLU', 'PLUIssues?'],
-        ['IS_ALCOHOL', 'IS_CBD', 'RestrictedItemIssues?', 'ExclusionIssues?'],
+        ['IS_ALCOHOL', 'IS_CBD', 'RestrictedItemIssues?', 'ExclusionIssues?', 'ExclusionDecision'],
         ['SNAP_ELIGIBLE', 'SNAPEligibilityIssues?'],
         ['PRODUCT_GROUP', 'ProductGroupIssues?'],
         ['VARIANT', 'VariantIssues?'],
@@ -586,7 +586,7 @@ if st.session_state.assessment_done:
         if st.session_state.get("taxonomy_mapping_csv"):
             with d_col4:
                 st.download_button(
-                label="⬇️ Download Taxonomy Mapping Assessment (.csv)",
+                label="⬇️ Taxonomy Mapping Assessment (.csv)",
                 data=st.session_state.taxonomy_mapping_csv,
                 file_name="Taxonomy_Mapping_Assessment.csv",
                 mime="text/csv",
