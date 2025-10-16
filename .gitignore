@@ -46,7 +46,7 @@ __pycache__/
 .DS_Store
 
 # Runtime inputs & offline wheels
-runtime/*.tar*
+# runtime/*.tar*
 runtime/*.tgz
 runtime/*.tar.zst
 # runtime/python.tar.*
