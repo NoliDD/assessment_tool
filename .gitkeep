@@ -2,3 +2,4 @@
 runtime/*
 !runtime/.gitkeep
 !runtime/README.md
+!runtime/python.tar.gz
